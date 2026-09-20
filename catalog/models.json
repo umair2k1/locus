@@ -40,5 +40,337 @@
     "chat": "Qwen3-4B",
     "utility": "Qwen3-1.7B",
     "embeddings": "embeddinggemma-300m"
-  }
+  },
+  "candidates": [
+    {
+      "id": "Qwen3-8B",
+      "name": "Qwen3 8B",
+      "repo": "Qwen/Qwen3-8B-GGUF",
+      "filename": "Qwen3-8B-Q4_K_M.gguf",
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+      "sizeBytes": 5027783488,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen3-8B-GGUF (407,558 downloads, 285 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen2.5-Coder-7B-Instruct",
+      "name": "Qwen2.5 Coder 7B Instruct",
+      "repo": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "filename": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "sha256": "509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c",
+      "sizeBytes": 4683073536,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen2.5-Coder-7B-Instruct-GGUF (273,995 downloads, 463 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3-0.6B",
+      "name": "Qwen3 0.6B",
+      "repo": "Qwen/Qwen3-0.6B-GGUF",
+      "filename": "Qwen3-0.6B-Q8_0.gguf",
+      "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+      "sizeBytes": 639446688,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen3-0.6B-GGUF (222,509 downloads, 77 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen2.5-1.5B-Instruct",
+      "name": "Qwen2.5 1.5B Instruct",
+      "repo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "filename": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "sizeBytes": 1117320736,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen2.5-1.5B-Instruct-GGUF (213,599 downloads, 158 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen2.5-0.5B-Instruct",
+      "name": "Qwen2.5 0.5B Instruct",
+      "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+      "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+      "sizeBytes": 491400032,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen2.5-0.5B-Instruct-GGUF (202,749 downloads, 134 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3-VL-8B-Instruct",
+      "name": "Qwen3 VL 8B Instruct",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+      "filename": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+      "sha256": "67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2",
+      "sizeBytes": 5027784800,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen3-VL-8B-Instruct-GGUF (135,499 downloads, 148 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3-VL-4B-Instruct",
+      "name": "Qwen3 VL 4B Instruct",
+      "repo": "Qwen/Qwen3-VL-4B-Instruct-GGUF",
+      "filename": "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+      "sha256": "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a",
+      "sizeBytes": 2497281664,
+      "contextLength": 4096,
+      "description": "Discovered from Qwen/Qwen3-VL-4B-Instruct-GGUF (129,147 downloads, 58 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gemma-4-E4B-it",
+      "name": "gemma 4 E4B it",
+      "repo": "ggml-org/gemma-4-E4B-it-GGUF",
+      "filename": "gemma-4-E4B-it-Q8_0.gguf",
+      "sha256": "34be82b17b4942d389b9b527170c4b058027abdd32531fda063d3d97dd8ce80a",
+      "sizeBytes": 8031242688,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/gemma-4-E4B-it-GGUF (1,507,437 downloads, 88 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.8-27B",
+      "name": "Qwen3.8 27B",
+      "repo": "ggml-org/Qwen3.8-27B-GGUF",
+      "filename": "dflash-Qwen3.8-27B-Q8_0.gguf",
+      "sha256": "ef6a1340ed018cc58f53efd3613312c719b9ebf72b5586a046214c7ba366b297",
+      "sizeBytes": 2056414560,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/Qwen3.8-27B-GGUF (1,206,561 downloads, 87 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gemma-4-26B-A4B-it",
+      "name": "gemma 4 26B A4B it",
+      "repo": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+      "filename": "dflash-gemma-4-26B-A4B-it-Q8_0.gguf",
+      "sha256": "b353b64a95f4a498ce036969df21a15191cc85800722a3e1f62f6110b91f01b2",
+      "sizeBytes": 472433824,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/gemma-4-26B-A4B-it-GGUF (311,217 downloads, 87 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gemma-3-1b-it",
+      "name": "gemma 3 1b it",
+      "repo": "ggml-org/gemma-3-1b-it-GGUF",
+      "filename": "gemma-3-1b-it-Q4_K_M.gguf",
+      "sha256": "8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135",
+      "sizeBytes": 806058240,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/gemma-3-1b-it-GGUF (191,765 downloads, 45 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.6-35B-A3B",
+      "name": "Qwen3.6 35B A3B",
+      "repo": "ggml-org/Qwen3.6-35B-A3B-GGUF",
+      "filename": "dflash-Qwen3.6-35B-A3B-Q8_0.gguf",
+      "sha256": "339030c9dad4f410c7ef2d6cbd6e38251a84fabb59c44db992538c2451a0efee",
+      "sizeBytes": 421060800,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/Qwen3.6-35B-A3B-GGUF (191,510 downloads, 19 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gpt-oss-20b",
+      "name": "gpt oss 20b",
+      "repo": "ggml-org/gpt-oss-20b-GGUF",
+      "filename": "eagle3-gpt-oss-20b-Q8_0.gguf",
+      "sha256": "6955f98a701e97a8c969f3ff33be8ba17b35bd60e5ac96258d2c42d710c7d63f",
+      "sizeBytes": 921488000,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/gpt-oss-20b-GGUF (171,152 downloads, 177 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gpt-oss-120b",
+      "name": "gpt oss 120b",
+      "repo": "ggml-org/gpt-oss-120b-GGUF",
+      "filename": "eagle3-gpt-oss-120b-Q8_0.gguf",
+      "sha256": "1f428ef9de7e761a34392253a6371b4a027595ccdafa18212b06d38a8db34b41",
+      "sizeBytes": 849103296,
+      "contextLength": 4096,
+      "description": "Discovered from ggml-org/gpt-oss-120b-GGUF (152,700 downloads, 76 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3-Coder-30B-A3B-Instruct",
+      "name": "Qwen3 Coder 30B A3B Instruct",
+      "repo": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+      "filename": "Qwen3-Coder-30B-A3B-Instruct-UD-TQ1_0.gguf",
+      "sha256": "fcb403c1d7a98bc0ffbe98ec7fbfafe1cdd0050af808ba4af8cd6dcaa807f8d9",
+      "sizeBytes": 8005213344,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF (12,729,626 downloads, 1,038 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.8-27B-Qwen3",
+      "name": "Qwen3.8 27B",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "filename": "Qwen3.8-27B-UD-IQ1_M.gguf",
+      "sha256": "1b5165a7149ea51e683c8eaf23372188ad9fc9d1a795386f7a1b558acf847dc6",
+      "sizeBytes": 6729166848,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.8-27B-GGUF (7,118,363 downloads, 4,388 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.5-9B",
+      "name": "Qwen3.5 9B",
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "filename": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "sizeBytes": 5680522464,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.5-9B-GGUF (1,536,622 downloads, 925 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Inkling-Small",
+      "name": "Inkling Small",
+      "repo": "unsloth/Inkling-Small-GGUF",
+      "filename": "mmproj-BF16.gguf",
+      "sha256": "05d4475a956030be87b099865d6552a541a476db8cc3e266fcfa7c5a24846248",
+      "sizeBytes": 138684128,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Inkling-Small-GGUF (1,422,712 downloads, 89 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.6-35B-A3B-mmproj-BF16",
+      "name": "Qwen3.6 35B A3B",
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "filename": "mmproj-BF16.gguf",
+      "sha256": "356dfaa3111376a4f7165e32e8749713378d1700b37cf52e0c50d9f23322334d",
+      "sizeBytes": 902822624,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.6-35B-A3B-GGUF (1,263,199 downloads, 1,617 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.6-27B-MTP",
+      "name": "Qwen3.6 27B MTP",
+      "repo": "unsloth/Qwen3.6-27B-MTP-GGUF",
+      "filename": "mmproj-BF16.gguf",
+      "sha256": "05353347512982ee62317b9d8c89372bc815f4b4043580e7ef3ad411ec1a1cd3",
+      "sizeBytes": 931146304,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.6-27B-MTP-GGUF (1,170,648 downloads, 1,313 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.6-27B",
+      "name": "Qwen3.6 27B",
+      "repo": "unsloth/Qwen3.6-27B-GGUF",
+      "filename": "mmproj-BF16.gguf",
+      "sha256": "05353347512982ee62317b9d8c89372bc815f4b4043580e7ef3ad411ec1a1cd3",
+      "sizeBytes": 931146304,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.6-27B-GGUF (1,086,427 downloads, 957 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "gemma-4-12B-it-qat",
+      "name": "gemma 4 12B it qat",
+      "repo": "unsloth/gemma-4-12B-it-qat-GGUF",
+      "filename": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+      "sha256": "90fd44e29e0d7cffeb0fd00dc73cfdab9ed0b0e95306ecf7821ea634c940c370",
+      "sizeBytes": 6716356800,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/gemma-4-12B-it-qat-GGUF (1,064,452 downloads, 526 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen3.6-35B-A3B-MTP",
+      "name": "Qwen3.6 35B A3B MTP",
+      "repo": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF",
+      "filename": "mmproj-BF16.gguf",
+      "sha256": "da63cb47a76763c712393f8a017070188a304fa39f8aeea6edc629ed7b975cfa",
+      "sizeBytes": 902822528,
+      "contextLength": 4096,
+      "description": "Discovered from unsloth/Qwen3.6-35B-A3B-MTP-GGUF (1,026,100 downloads, 933 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "endless-frontier_BigBang-v1",
+      "name": "endless frontier_BigBang v1",
+      "repo": "bartowski/endless-frontier_BigBang-v1-GGUF",
+      "filename": "endless-frontier_BigBang-v1-imatrix.gguf",
+      "sha256": "05eb8672e7ff0397955d5cd0e7f2e46d04eacaf047b87314ff1b0ef1f3d93558",
+      "sizeBytes": 192223904,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/endless-frontier_BigBang-v1-GGUF (984,142 downloads, 30 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "XYZAILab_XYZ-Aquila-mini",
+      "name": "XYZAILab_XYZ Aquila mini",
+      "repo": "bartowski/XYZAILab_XYZ-Aquila-mini-GGUF",
+      "filename": "XYZAILab_XYZ-Aquila-mini-imatrix.gguf",
+      "sha256": "328c579c0cf3aee3d031811eb7d9cb5793b6b732778b6700f87a3ea6831ad71f",
+      "sizeBytes": 192223904,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/XYZAILab_XYZ-Aquila-mini-GGUF (878,386 downloads, 4 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Kwaipilot_KAT-Coder-V2.5-Dev",
+      "name": "Kwaipilot_KAT Coder V2.5 Dev",
+      "repo": "bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF",
+      "filename": "Kwaipilot_KAT-Coder-V2.5-Dev-imatrix.gguf",
+      "sha256": "f5727113280b24cbacc2f5308c970ab5efc8adb15d3ac4feb0e27ae1ac469c7c",
+      "sizeBytes": 192223904,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF (396,117 downloads, 133 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen_Qwen3.6-35B-A3B",
+      "name": "Qwen_Qwen3.6 35B A3B",
+      "repo": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF",
+      "filename": "mtp-Qwen_Qwen3.6-35B-A3B-Q8_0.gguf",
+      "sha256": "7f72d7cc4a9ff28cf0bd98a4e6e95e6869efa3b70c7244075376335f38109330",
+      "sizeBytes": 1989597056,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/Qwen_Qwen3.6-35B-A3B-GGUF (377,050 downloads, 156 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen_Qwen3.5-35B-A3B",
+      "name": "Qwen_Qwen3.5 35B A3B",
+      "repo": "bartowski/Qwen_Qwen3.5-35B-A3B-GGUF",
+      "filename": "Qwen_Qwen3.5-35B-A3B-imatrix.gguf",
+      "sha256": "6e58fb4a78be66e95e37cb2e24c297adfd977fbbdc158ae7e6633cc7e76c1915",
+      "sizeBytes": 192223904,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/Qwen_Qwen3.5-35B-A3B-GGUF (352,641 downloads, 68 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen_Qwen3.5-4B",
+      "name": "Qwen_Qwen3.5 4B",
+      "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+      "filename": "Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+      "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
+      "sizeBytes": 3013027808,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/Qwen_Qwen3.5-4B-GGUF (344,733 downloads, 51 likes).",
+      "suggestedCategory": ""
+    },
+    {
+      "id": "Qwen_Qwen3.5-2B",
+      "name": "Qwen_Qwen3.5 2B",
+      "repo": "bartowski/Qwen_Qwen3.5-2B-GGUF",
+      "filename": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+      "sha256": "57a1085840f497d764a7fc5d346922dbde961efb54cc792ea81d694fd846a1d8",
+      "sizeBytes": 1396198496,
+      "contextLength": 4096,
+      "description": "Discovered from bartowski/Qwen_Qwen3.5-2B-GGUF (329,576 downloads, 25 likes).",
+      "suggestedCategory": ""
+    }
+  ]
 }
