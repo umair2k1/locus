@@ -16,7 +16,12 @@
 >    - `sh ./gradlew detekt` (static analysis, complexity, magic numbers, method length)
 >    - `sh ./gradlew :app:assembleOssDebug :app:assembleFullDebug` (assemble both flavors)
 >    - `sh ./gradlew test` (unit test suite across all modules)
-> 6. **MANDATORY COMMIT & PUSH AFTER EVERY NUMBERED PROMPT**: After finishing and verifying each numbered prompt (acceptance criteria satisfied, on-device ADB verified, CI gates passing), ALWAYS commit all changes with the designated prompt commit message and push immediately to `origin/master`.
+>
+> 7. **RELEASING TO GITHUB**: A GitHub Release (with installable APKs) is created ONLY by pushing a `v*` tag — a plain `git push` to `master` NEVER triggers a release. To cut a release:
+>    ```bash
+>    git tag v<X.Y.Z> && git push origin v<X.Y.Z>
+>    ```
+>    The tag push triggers `.github/workflows/release.yml`, which runs all CI gates, builds both APK flavors, and publishes the release automatically. NEVER assume a release was created from a commit push alone; verify at `github.com/umair2k1/locus/releases`.
 
 ---
 
@@ -77,4 +82,11 @@ sh ./gradlew test
 git add -A
 git commit -m "<prompt-commit-message>"
 git push origin master
+```
+
+### 8. Cut a GitHub Release
+```bash
+git tag v<X.Y.Z>
+git push origin v<X.Y.Z>
+# Release appears at github.com/umair2k1/locus/releases after CI completes (~5 min)
 ```
