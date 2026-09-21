@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make scripts executable
+        run: chmod +x gradlew scripts/import-hygiene.sh
+
+      # ── CI gates (must all pass before a release artifact is published) ──
+
+      - name: Spotless check
+        run: ./gradlew spotlessCheck
+
+      - name: Import hygiene check
+        run: ./scripts/import-hygiene.sh
+
+      - name: Detekt static analysis
+        run: ./gradlew detekt
+
+      - name: Run unit tests
+        run: ./gradlew test
+
+      # ── Build both distribution flavors ──
+
+      - name: Assemble OSS debug APK
+        run: ./gradlew :app:assembleOssDebug
+
+      - name: Assemble Full debug APK
+        run: ./gradlew :app:assembleFullDebug
+
+      # ── Derive version and changelog ──
+
+      - name: Extract version from tag
+        id: version
+        run: echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog since last tag
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          else
+            LOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          {
+            echo 'body<<CHANGELOG_EOF'
+            echo "## What's changed"
+            echo ""
+            echo "$LOG"
+            echo ""
+            echo "---"
+            echo "_Built from tag \`${GITHUB_REF_NAME}\` · $(date -u +'%Y-%m-%d %H:%M UTC')_"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # ── Publish GitHub Release with both APKs ──
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.name }}
+          name: Locus ${{ steps.version.outputs.name }}
+          body: ${{ steps.changelog.outputs.body }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            app/build/outputs/apk/oss/debug/app-oss-debug.apk
+            app/build/outputs/apk/full/debug/app-full-debug.apk
