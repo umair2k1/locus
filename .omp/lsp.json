@@ -1,5 +1,11 @@
 {
   "servers": {
+    "kotlin-lsp": {
+      "command": "kotlin-lsp",
+      "args": ["--stdio"],
+      "fileTypes": [".kt", ".kts"],
+      "rootMarkers": ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]
+    },
     "clangd": {
       "command": "clangd",
       "args": ["--background-index", "--clang-tidy"],
