@@ -88,7 +88,7 @@ class RoomIndexUpdateQueue
                 val body =
                     runCatching { noteRepositoryProvider.get().readBody(receipt.noteId) }
                         .getOrDefault(saved.bodyPreview)
-                coordinator.reindexIfNeeded(note, body)
+                runCatching { coordinator.reindexIfNeeded(note, body) }
             }
         }
     }

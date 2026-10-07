@@ -51,20 +51,28 @@ internal class EmbeddingRunnerGatewayAdapter
         @Volatile private var isInitialized = false
 
         override suspend fun embed(text: String): FloatArray {
-            ensureModelLoaded()
-            return runner.embed(text)
+            val loaded = ensureModelLoaded()
+            return if (loaded) {
+                runCatching { runner.embed(text) }.getOrDefault(FloatArray(EmbeddingRunner.TARGET_DIM))
+            } else {
+                FloatArray(EmbeddingRunner.TARGET_DIM)
+            }
         }
 
-        private suspend fun ensureModelLoaded() {
-            if (!isInitialized) {
-                initMutex.withLock {
-                    if (!isInitialized) {
-                        val loadResult = modelDownloader.loadModel(runtime)
-                        check(loadResult.isSuccess) {
-                            "Failed to load embedding model: ${loadResult.exceptionOrNull()?.message}"
-                        }
-                        isInitialized = true
-                    }
+        private suspend fun ensureModelLoaded(): Boolean {
+            if (isInitialized) return true
+            return initMutex.withLock {
+                if (isInitialized) return@withLock true
+                val modelFile = modelDownloader.getModelFile()
+                if (!modelFile.exists() || modelFile.length() == 0L) {
+                    return@withLock false
+                }
+                val loadResult = modelDownloader.loadModel(runtime)
+                if (loadResult.isSuccess) {
+                    isInitialized = true
+                    true
+                } else {
+                    false
                 }
             }
         }
