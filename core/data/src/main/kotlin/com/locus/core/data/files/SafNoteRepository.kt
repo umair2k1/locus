@@ -504,6 +504,102 @@ class SafNoteRepository
                 refresh()
             }
 
+        override suspend fun getNote(noteId: String): Note? =
+            withContext(Dispatchers.IO) {
+                var doc = noteIdToDoc[noteId]
+                if (doc == null) {
+                    loadAllNotes()
+                    doc = noteIdToDoc[noteId]
+                }
+                if (doc == null) return@withContext null
+                val rawText = fileSource.readText(doc)
+                val parsed = parseDocument(doc, parser, rawText)
+                val treeUri = getEffectiveTreeUri() ?: Uri.EMPTY
+                val root = runCatching { fileSource.getRootDocument(treeUri) }.getOrNull()
+                val folderPath = computeFolderPath(doc, root)
+                parsed.toDomain(folderPath)
+            }
+
+        override suspend fun setTags(
+            noteId: String,
+            tags: List<String>,
+        ) {
+            withContext(Dispatchers.IO) {
+                var doc = noteIdToDoc[noteId]
+                if (doc == null) {
+                    loadAllNotes()
+                    doc = noteIdToDoc[noteId]
+                }
+                if (doc == null) {
+                    throw NoSuchElementException("Note with id '$noteId' not found")
+                }
+
+                val rawText = fileSource.readText(doc)
+                val parsed = parseDocument(doc, parser, rawText)
+                val updatedNote =
+                    parsed.copy(
+                        tags = tags,
+                        modified = clock.now(),
+                    )
+                val updatedContent = parser.render(updatedNote)
+                val path = doc.uri.toString()
+                coordinator.onEdit(noteId, path, updatedContent)
+                val flushResult = coordinator.forceFlush(noteId, FlushTrigger.EDITOR_CLOSE)
+                val receipt =
+                    flushResult?.getOrThrow() ?: throw IOException("Failed to flush note $noteId")
+
+                val treeUri = getEffectiveTreeUri() ?: Uri.EMPTY
+                val root = runCatching { fileSource.getRootDocument(treeUri) }.getOrNull()
+                val folderPath = computeFolderPath(doc, root)
+                val entity = updatedNote.toIndexEntity(folderPath, receipt.checksum)
+                noteDao.upsert(entity)
+                refresh()
+            }
+        }
+
+        override suspend fun moveNote(
+            noteId: String,
+            targetFolderPath: String,
+        ) {
+            withContext(Dispatchers.IO) {
+                val treeUri =
+                    getEffectiveTreeUri() ?: error("No tree URI configured; cannot move note")
+                val root =
+                    fileSource.getRootDocument(treeUri)
+                        ?: throw IOException("Cannot load root document for $treeUri")
+
+                var doc = noteIdToDoc[noteId]
+                if (doc == null) {
+                    loadAllNotes()
+                    doc = noteIdToDoc[noteId]
+                }
+                if (doc == null) {
+                    throw NoSuchElementException("Note with id '$noteId' not found")
+                }
+
+                val normalizedTarget = normalizeFolderPath(targetFolderPath)
+                val targetDir = resolveOrCreateDirectory(root, normalizedTarget)
+
+                val existingInTarget = targetDir.listFiles().mapNotNull { it.name }.toSet()
+                val currentName = doc.name ?: "$noteId$MD_EXTENSION"
+                val safeName = FilenameCollisionResolver.resolve(currentName, existingInTarget)
+                if (safeName != doc.name) {
+                    fileSource.renameDocument(doc, safeName)
+                }
+
+                coordinator.forceFlush(noteId, FlushTrigger.EDITOR_CLOSE)
+                val movedDoc = fileSource.moveDocument(doc, targetDir)
+                noteIdToDoc[noteId] = movedDoc
+
+                val rawText = fileSource.readText(movedDoc)
+                val parsed = parseDocument(movedDoc, parser, rawText)
+                val checksum = Checksum.sha256(parsed.body)
+                val entity = parsed.toIndexEntity(normalizedTarget, checksum)
+                noteDao.upsert(entity)
+                refresh()
+            }
+        }
+
         override suspend fun rescan(): RescanReport =
             withContext(Dispatchers.IO) {
                 val treeUri = getEffectiveTreeUri() ?: return@withContext RescanReport(0, 0, 0)

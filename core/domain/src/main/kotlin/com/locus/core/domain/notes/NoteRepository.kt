@@ -8,6 +8,7 @@ data class RescanReport(
     val removed: Int,
 )
 
+@Suppress("TooManyFunctions")
 interface NoteRepository {
     fun observeNotesInFolder(folderPath: String): Flow<List<Note>>
 
@@ -66,4 +67,16 @@ interface NoteRepository {
     suspend fun setRootUri(uriString: String) {}
 
     suspend fun listRevisions(noteId: String): List<HistoryRevision> = emptyList()
+
+    suspend fun getNote(noteId: String): Note? = null
+
+    suspend fun moveNote(
+        noteId: String,
+        targetFolderPath: String,
+    ) {}
+
+    suspend fun setTags(
+        noteId: String,
+        tags: List<String>,
+    ) {}
 }
