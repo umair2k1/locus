@@ -1,5 +1,6 @@
 package com.locus.core.ai.toolloop
 
+import com.locus.core.domain.agent.BulkCapExceededException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -46,7 +47,7 @@ class ToolLoopException(
  * JSON object matching [ToolCallEnvelope]; the loop appends the raw model text and the raw tool
  * result to the transcript verbatim, and stops at [maxIterations] to guarantee termination.
  */
-@Suppress("ThrowsCount", "MaxLineLength")
+@Suppress("ThrowsCount", "MaxLineLength", "TooGenericExceptionCaught")
 class JsonModeToolLoop(
     private val client: JsonModeCompletionClient,
     private val tools: List<ToolExecutor>,
@@ -77,11 +78,16 @@ class JsonModeToolLoop(
                 transcript += "TOOL_ERROR: unknown tool '${call.name}'"
                 return@repeat
             }
-            val result =
-                runCatching { tool.execute(call.argumentsJson) }.getOrElse { e ->
+            try {
+                val result = tool.execute(call.argumentsJson)
+                transcript += "TOOL_RESULT(${call.name}): $result"
+            } catch (e: BulkCapExceededException) {
+                transcript += "TOOL_ERROR: ${e.message}"
+            } catch (e: Exception) {
+                val result =
                     """{"error":"${(e.message ?: "tool failed").replace("\"", "'")}"}"""
-                }
-            transcript += "TOOL_RESULT(${call.name}): $result"
+                transcript += "TOOL_RESULT(${call.name}): $result"
+            }
         }
         throw ToolLoopException("exceeded $maxIterations iterations without a final answer")
     }

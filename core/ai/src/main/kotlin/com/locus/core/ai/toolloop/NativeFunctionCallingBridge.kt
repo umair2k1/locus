@@ -1,5 +1,6 @@
 package com.locus.core.ai.toolloop
 
+import com.locus.core.domain.agent.BulkCapExceededException
 import com.locus.core.domain.providers.ProviderAdapter
 import com.locus.core.domain.providers.ProviderMessage
 import com.locus.core.domain.providers.ProviderRole
@@ -10,6 +11,7 @@ import com.locus.core.domain.providers.ToolSchema as DomainToolSchema
  * Routes tool use through the provider's native function calling mechanism when
  * [com.locus.core.domain.providers.ProviderCapabilities.supportsNativeTools] is true.
  */
+@Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
 class NativeFunctionCallingBridge(
     private val adapter: ProviderAdapter,
     private val tools: List<ToolExecutor>,
@@ -67,7 +69,11 @@ class NativeFunctionCallingBridge(
                     if (tool == null) {
                         """{"error":"unknown tool '$toolName'"}"""
                     } else {
-                        runCatching { tool.execute(call.arguments.toString()) }.getOrElse { e ->
+                        try {
+                            tool.execute(call.arguments.toString())
+                        } catch (e: BulkCapExceededException) {
+                            """{"error":"TOOL_ERROR: ${e.message}"}"""
+                        } catch (e: Exception) {
                             """{"error":"${(e.message ?: "tool failed").replace("\"", "'")}"}"""
                         }
                     }

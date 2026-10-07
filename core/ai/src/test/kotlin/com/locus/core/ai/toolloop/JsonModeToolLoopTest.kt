@@ -7,6 +7,8 @@ import com.locus.core.ai.tools.ReadNoteResult
 import com.locus.core.ai.tools.ReadNoteTool
 import com.locus.core.ai.tools.SearchNotesTool
 import com.locus.core.ai.tools.SearchResultDto
+import com.locus.core.ai.tools.UpdateNoteTool
+import com.locus.core.domain.agent.AgentRunCoordinator
 import com.locus.core.domain.notes.Note
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
@@ -24,7 +26,9 @@ import com.locus.core.domain.search.KeywordSearch
 import com.locus.core.domain.search.RankedChunk
 import com.locus.core.domain.search.SearchResult
 import com.locus.core.domain.search.SearchScope
+import com.locus.core.domain.settings.AgentSettingsStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
@@ -426,5 +430,55 @@ class JsonModeToolLoopTest {
 
             val jsonResult = orchestrator.run("List my folders", nonNativeAdapter)
             assertEquals("Found 2 folders in json mode", jsonResult)
+        }
+
+    private class FakeTestAgentSettingsStore(
+        initialCap: Int = 1,
+    ) : AgentSettingsStore {
+        private val _bulkCap = MutableStateFlow(initialCap)
+        override val bulkCap: Flow<Int> = _bulkCap
+
+        override suspend fun setBulkCap(value: Int) {
+            _bulkCap.value = value
+        }
+    }
+
+    @Test
+    fun toolOrchestrator_routesWriteToolsThroughCoordinatorAndEnforcesBulkCap() =
+        runTest {
+            val (searchTool, readTool, foldersTool) =
+                createSeededTools(folders = listOf("Personal"))
+            val fakeRepo = FakeNoteRepository()
+            val updateTool = UpdateNoteTool(fakeRepo)
+            val settingsStore = FakeTestAgentSettingsStore(initialCap = 1)
+            val coordinator = AgentRunCoordinator(settingsStore = settingsStore, confirmationCallback = { true })
+
+            val orchestrator =
+                ToolOrchestrator(
+                    tools = listOf(searchTool, readTool, foldersTool, updateTool),
+                    agentRunCoordinator = coordinator,
+                )
+
+            val client =
+                FakeCompletionClient(
+                    listOf(
+                        // Turn 1: update note-1 (within cap = 1)
+                        """{"thought":"updating 1","toolCall":{"name":"update_note","argumentsJson":"{\"noteId\":\"note-1\",\"body\":\"body 1\"}"}}""",
+                        // Turn 2: update note-2 (exceeds cap = 1) -> coordinator throws BulkCapExceededException -> TOOL_ERROR in transcript
+                        """{"thought":"updating 2","toolCall":{"name":"update_note","argumentsJson":"{\"noteId\":\"note-2\",\"body\":\"body 2\"}"}}""",
+                        // Turn 3: sees TOOL_ERROR and answers
+                        """{"thought":"cap hit","finalAnswer":"Stopped because bulk cap exceeded"}""",
+                    ),
+                )
+
+            val finalResult = orchestrator.runWithJsonClient("Update both notes", client)
+            assertEquals("Stopped because bulk cap exceeded", finalResult)
+
+            // Verify transcript recorded TOOL_ERROR for the second call
+            val lastTranscript = client.recordedTranscripts.last()
+            assertTrue(
+                "Transcript should record TOOL_ERROR when bulk cap is exceeded",
+                lastTranscript.any { it.startsWith("TOOL_ERROR: Bulk operation cap exceeded") },
+            )
         }
 }

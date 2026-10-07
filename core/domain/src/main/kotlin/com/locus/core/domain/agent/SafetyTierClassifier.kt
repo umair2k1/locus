@@ -13,6 +13,35 @@ enum class WriteToolName {
     TAG_NOTE,
     TRASH_NOTE,
     MERGE_NOTES,
+    ;
+
+    val isWriteTool: Boolean
+        get() =
+            when (this) {
+                SEARCH_NOTES, READ_NOTE, LIST_FOLDERS -> false
+                CREATE_NOTE, APPEND_TO_NOTE, CREATE_FOLDER, SET_REMINDER,
+                UPDATE_NOTE, MOVE_NOTE, TAG_NOTE, TRASH_NOTE, MERGE_NOTES,
+                -> true
+            }
+
+    companion object {
+        fun fromToolName(name: String): WriteToolName? =
+            when (name.trim().lowercase()) {
+                "search_notes" -> SEARCH_NOTES
+                "read_note" -> READ_NOTE
+                "list_folders" -> LIST_FOLDERS
+                "create_note" -> CREATE_NOTE
+                "append_to_note" -> APPEND_TO_NOTE
+                "create_folder" -> CREATE_FOLDER
+                "set_reminder" -> SET_REMINDER
+                "update_note" -> UPDATE_NOTE
+                "move_note" -> MOVE_NOTE
+                "tag_note" -> TAG_NOTE
+                "trash_note" -> TRASH_NOTE
+                "merge_notes" -> MERGE_NOTES
+                else -> null
+            }
+    }
 }
 
 enum class CallOrigin { USER_CHAT_INSTRUCTION, RETRIEVED_NOTE_CONTENT }
