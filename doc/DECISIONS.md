@@ -17,3 +17,7 @@
 ## D-7: Model benchmark storage is update-in-place per (modelId, device) pair in ModelMetaEntity, adhering to M-3's singular measured tok/s requirement rather than maintaining an unbounded historical log.
 
 ## D-6: catalog seed checksums resolved via the HF API on 2026-09-19 — see catalog/models.json for the pinned values. (Note: Qwen/Qwen3-1.7B-GGUF provides Qwen3-1.7B-Q8_0.gguf in the official repository; pinned live SHA-256 for Q8_0).
+
+## D-8: I-1 inline AI actions target English-only for TRANSLATE per NF-4 non-goal (ruling out non-Latin / other-language UI; "translate" normalizes foreign snippets pasted by users into English rather than providing an unbounded language picker).
+
+## D-9: Inline AI single-shot actions (I-1) route through RouteAndSend with TaskType.CHAT_RAG_QA as the closest existing P-4 routing row, since P-4 does not define a dedicated inline-action routing row.

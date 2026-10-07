@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.locus.app.navigation.LocusDestinations
 import com.locus.core.domain.notes.FlushTrigger
+import com.locus.core.domain.notes.InlineAiAction
+import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
 import com.locus.core.domain.time.DispatcherProvider
@@ -29,6 +31,16 @@ data class EditorUiState(
     val type: NoteType = NoteType.NOTE,
 )
 
+data class InlineAiReviewState(
+    val action: InlineAiAction,
+    val originalText: String,
+    val resultText: String = "",
+    val isSelection: Boolean = false,
+    val rangeStart: Int = 0,
+    val rangeEnd: Int = 0,
+    val isLoading: Boolean = false,
+)
+
 @HiltViewModel
 class EditorViewModel
     @Inject
@@ -36,6 +48,7 @@ class EditorViewModel
         private val repo: NoteRepository,
         private val dispatchers: DispatcherProvider,
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val inlineAiUseCase: InlineAiUseCase? = null,
     ) : ViewModel() {
         private val flushScope = CoroutineScope(SupervisorJob() + dispatchers.io)
         private var currentNoteId: String =
@@ -47,6 +60,8 @@ class EditorViewModel
         private var observeNotesJob: Job? = null
         private val _uiState = MutableStateFlow(EditorUiState())
         val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
+        private val _inlineAiState = MutableStateFlow<InlineAiReviewState?>(null)
+        val inlineAiState: StateFlow<InlineAiReviewState?> = _inlineAiState.asStateFlow()
 
         init {
             if (currentNoteId.isNotEmpty()) {
@@ -217,6 +232,59 @@ class EditorViewModel
         override fun onCleared() {
             super.onCleared()
             onDispose()
+        }
+
+        fun runInlineAi(
+            action: InlineAiAction,
+            text: String,
+            isSelection: Boolean = false,
+            rangeStart: Int = 0,
+            rangeEnd: Int = 0,
+        ) {
+            if (text.isBlank()) return
+            _inlineAiState.value =
+                InlineAiReviewState(
+                    action = action,
+                    originalText = text,
+                    resultText = "",
+                    isSelection = isSelection,
+                    rangeStart = rangeStart,
+                    rangeEnd = rangeEnd,
+                    isLoading = true,
+                )
+            viewModelScope.launch(dispatchers.io) {
+                val result = inlineAiUseCase?.execute(action, text) ?: ""
+                _inlineAiState.update { it?.copy(resultText = result, isLoading = false) }
+            }
+        }
+
+        fun acceptInlineAi() {
+            val state = _inlineAiState.value ?: return
+            val currentBody = _uiState.value.body
+            val newBody =
+                if (state.isSelection) {
+                    val start = state.rangeStart
+                    val end = state.rangeEnd
+                    if (start in 0..currentBody.length && end in start..currentBody.length) {
+                        currentBody.replaceRange(start, end, state.resultText)
+                    } else {
+                        currentBody.replace(state.originalText, state.resultText)
+                    }
+                } else {
+                    if (state.action == InlineAiAction.SUMMARIZE ||
+                        state.action == InlineAiAction.EXTRACT_TASKS
+                    ) {
+                        currentBody + "\n\n" + state.resultText
+                    } else {
+                        state.resultText
+                    }
+                }
+            onBodyChange(newBody)
+            _inlineAiState.value = null
+        }
+
+        fun dismissInlineAi() {
+            _inlineAiState.value = null
         }
 
         private companion object {

@@ -51,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.locus.app.R
+import com.locus.core.domain.notes.InlineAiAction
 
 @Composable
 fun EditorScreen(
@@ -78,6 +79,7 @@ fun EditorScreen(
     }
 
     val uiState by viewModel.uiState.collectAsState()
+    val inlineAiState by viewModel.inlineAiState.collectAsState()
 
     var showHistorySheet by remember { mutableStateOf(false) }
 
@@ -90,6 +92,12 @@ fun EditorScreen(
             onDeleteNote = { viewModel.deleteNote(onDeleted = onNavigateBack) },
             onOpenHistory = { showHistorySheet = true },
             onNavigateToNote = onNavigateToNote,
+            onRunInlineAi = { action, text, isSelection, start, end ->
+                viewModel.runInlineAi(action, text, isSelection, start, end)
+            },
+            onRunWholeNote = { action ->
+                viewModel.runInlineAi(action, viewModel.uiState.value.body, isSelection = false)
+            },
         )
     EditorContent(
         uiState = uiState,
@@ -107,8 +115,17 @@ fun EditorScreen(
             },
         )
     }
+
+    inlineAiState?.let { state ->
+        InlineAiSheet(
+            state = state,
+            onAccept = { viewModel.acceptInlineAi() },
+            onDismiss = { viewModel.dismissInlineAi() },
+        )
+    }
 }
 
+@Suppress("LongParameterList")
 private data class EditorActions(
     val onNavigateBack: () -> Unit,
     val onTogglePreview: () -> Unit,
@@ -117,6 +134,8 @@ private data class EditorActions(
     val onDeleteNote: () -> Unit,
     val onOpenHistory: () -> Unit,
     val onNavigateToNote: ((String) -> Unit)? = null,
+    val onRunInlineAi: (InlineAiAction, String, Boolean, Int, Int) -> Unit,
+    val onRunWholeNote: (InlineAiAction) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,6 +168,7 @@ private fun EditorContent(
                 onTogglePreview = actions.onTogglePreview,
                 onDeleteNote = actions.onDeleteNote,
                 onOpenHistory = actions.onOpenHistory,
+                onRunWholeNote = actions.onRunWholeNote,
             )
         },
         modifier = modifier.fillMaxSize(),
@@ -190,6 +210,7 @@ private fun EditorContent(
                         textFieldValue = newValue
                         actions.onBodyChange(newValue.text)
                     },
+                    actions = actions,
                 )
             }
         }
@@ -197,6 +218,7 @@ private fun EditorContent(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 private fun EditorTopBar(
     isPreview: Boolean,
@@ -204,6 +226,7 @@ private fun EditorTopBar(
     onTogglePreview: () -> Unit,
     onDeleteNote: () -> Unit,
     onOpenHistory: () -> Unit,
+    onRunWholeNote: (InlineAiAction) -> Unit,
 ) {
     TopAppBar(
         title = {},
@@ -252,18 +275,48 @@ private fun EditorTopBar(
                             onOpenHistory()
                         },
                     )
+                    DropdownMenuItem(
+                        text = { Text("AI: Summarize note") },
+                        onClick = {
+                            menuExpanded = false
+                            onRunWholeNote(InlineAiAction.SUMMARIZE)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("AI: Rewrite note") },
+                        onClick = {
+                            menuExpanded = false
+                            onRunWholeNote(InlineAiAction.REWRITE)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("AI: Translate note (English)") },
+                        onClick = {
+                            menuExpanded = false
+                            onRunWholeNote(InlineAiAction.TRANSLATE)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("AI: Extract tasks") },
+                        onClick = {
+                            menuExpanded = false
+                            onRunWholeNote(InlineAiAction.EXTRACT_TASKS)
+                        },
+                    )
                 }
             }
         },
     )
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun SourceEditorColumn(
     titleFieldValue: TextFieldValue,
     onTitleChange: (TextFieldValue) -> Unit,
     textFieldValue: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
+    actions: EditorActions,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -272,6 +325,7 @@ private fun SourceEditorColumn(
             onTitleChange = onTitleChange,
         )
         HorizontalDivider()
+        val hasSelection = textFieldValue.selection.length > 0
         FormattingToolbar(
             actions =
                 EditorToolbarActions(
@@ -280,6 +334,20 @@ private fun SourceEditorColumn(
                     onHeading = { onValueChange(applyHeading(textFieldValue)) },
                     onList = { onValueChange(applyList(textFieldValue)) },
                     onCheckbox = { onValueChange(applyCheckbox(textFieldValue)) },
+                    onInlineAi =
+                        if (hasSelection) {
+                            { action ->
+                                val text = textFieldValue.text
+                                val start = textFieldValue.selection.min
+                                val end = textFieldValue.selection.max
+                                if (start < end && end <= text.length) {
+                                    val selected = text.substring(start, end)
+                                    actions.onRunInlineAi(action, selected, true, start, end)
+                                }
+                            }
+                        } else {
+                            null
+                        },
                 ),
         )
         HorizontalDivider()
@@ -323,12 +391,14 @@ private fun TitleInputField(
     }
 }
 
+@Suppress("LongParameterList")
 private data class EditorToolbarActions(
     val onBold: () -> Unit,
     val onItalic: () -> Unit,
     val onHeading: () -> Unit,
     val onList: () -> Unit,
     val onCheckbox: () -> Unit,
+    val onInlineAi: ((InlineAiAction) -> Unit)? = null,
 )
 
 @Composable
@@ -348,6 +418,12 @@ private fun FormattingToolbar(
         ToolbarAction(label = "H", fontWeight = FontWeight.Bold, onClick = actions.onHeading)
         ToolbarAction(label = "•-", fontWeight = FontWeight.Bold, onClick = actions.onList)
         ToolbarAction(label = "[✓]", fontWeight = FontWeight.Bold, onClick = actions.onCheckbox)
+        actions.onInlineAi?.let { onAi ->
+            ToolbarAction(label = "AI: Summarize", onClick = { onAi(InlineAiAction.SUMMARIZE) })
+            ToolbarAction(label = "AI: Rewrite", onClick = { onAi(InlineAiAction.REWRITE) })
+            ToolbarAction(label = "AI: Translate", onClick = { onAi(InlineAiAction.TRANSLATE) })
+            ToolbarAction(label = "AI: Tasks", onClick = { onAi(InlineAiAction.EXTRACT_TASKS) })
+        }
     }
 }
 

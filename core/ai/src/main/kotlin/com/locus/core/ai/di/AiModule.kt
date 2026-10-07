@@ -21,6 +21,7 @@ import com.locus.core.domain.chat.RagAnswerUseCase
 import com.locus.core.domain.models.DeviceCapabilitiesGateway
 import com.locus.core.domain.models.ModelManagerRepository
 import com.locus.core.domain.models.ModelRegistry
+import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.providers.ProviderAdapter
 import com.locus.core.domain.search.EmbeddingGateway
@@ -160,6 +161,13 @@ abstract class AiModule {
                 noteRepository = noteRepository,
                 activeModelRepository = activeModelRepository,
                 localChatClient = localChatClient,
+            )
+
+        @Provides
+        @Singleton
+        fun provideInlineAiUseCase(providerAdapter: ProviderAdapter): InlineAiUseCase =
+            InlineAiUseCase(
+                chatModelClient = providerAdapter,
             )
     }
 }
