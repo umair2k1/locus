@@ -27,6 +27,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
+@Suppress("LargeClass")
 class SafNoteRepositoryTest {
     private lateinit var parser: FrontmatterParser
     private val treeUri: Uri =
@@ -506,6 +507,94 @@ class SafNoteRepositoryTest {
             val afterClear = repository.observeAllNotes().first()
             assertEquals(1, afterClear.size)
             assertNull(afterClear[0].color)
+        }
+
+    @Test
+    fun setTags_updatesFrontmatterAndEmitsNewState() =
+        runTest {
+            val root = TestDocumentFile(parent = null, docName = "Notes", isDir = true)
+            val rawContent =
+                """
+                ---
+                id: 0191ebc2-841e-7b28-b072-46ebc605cf52
+                title: Tag Test Note
+                type: note
+                created: 2026-09-16T10:00:00Z
+                modified: 2026-09-16T10:00:00Z
+                tags:
+                  - original
+                ---
+                Some content here.
+                """.trimIndent()
+
+            val noteFile =
+                TestDocumentFile(
+                    parent = root,
+                    docName = "Tag Test Note.md",
+                    isDir = false,
+                    content = rawContent,
+                )
+            root.children.add(noteFile)
+
+            val fileSource = FakeSafNoteFileSource(root)
+            val fileWriter =
+                object : NoteFileWriter {
+                    override suspend fun atomicWrite(
+                        noteId: String,
+                        path: String,
+                        content: String,
+                    ): Result<FlushReceipt> {
+                        noteFile.content = content
+                        return Result.success(
+                            FlushReceipt(
+                                noteId = noteId,
+                                checksum = Checksum.sha256(content),
+                                flushedAt = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
+            val dummyQueue =
+                object : IndexUpdateQueue {
+                    override suspend fun enqueue(receipt: FlushReceipt) = Unit
+                }
+            val testDispatchers =
+                object : DispatcherProvider {
+                    override val io: CoroutineDispatcher = Dispatchers.Unconfined
+                    override val default: CoroutineDispatcher = Dispatchers.Unconfined
+                    override val main: CoroutineDispatcher = Dispatchers.Unconfined
+                    override val mainImmediate: CoroutineDispatcher = Dispatchers.Unconfined
+                }
+            val coordinator =
+                NoteFlushCoordinator(
+                    fileWriter = fileWriter,
+                    indexQueue = dummyQueue,
+                    dispatchers = testDispatchers,
+                    scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+                )
+
+            val repository =
+                SafNoteRepository(
+                    fileSource = fileSource,
+                    parser = parser,
+                    coordinator = coordinator,
+                    initialTreeUri = treeUri,
+                )
+
+            // Set tags to [original, android, compose]
+            repository.setTags(
+                "0191ebc2-841e-7b28-b072-46ebc605cf52",
+                listOf("original", "android", "compose"),
+            )
+
+            // Verify file content updated with frontmatter round-trip
+            assertTrue(noteFile.content.contains("android"))
+            assertTrue(noteFile.content.contains("compose"))
+
+            // Verify repository flow emits updated state
+            val afterTags = repository.observeAllNotes().first()
+            assertEquals(1, afterTags.size)
+            assertEquals(listOf("original", "android", "compose"), afterTags[0].tags)
         }
 
     private fun createRepository(

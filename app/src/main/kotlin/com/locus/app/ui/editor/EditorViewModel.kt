@@ -9,6 +9,7 @@ import com.locus.core.domain.notes.InlineAiAction
 import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
+import com.locus.core.domain.notes.SuggestTagsUseCase
 import com.locus.core.domain.time.DispatcherProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +42,12 @@ data class InlineAiReviewState(
     val isLoading: Boolean = false,
 )
 
+data class TagSuggestionState(
+    val suggestedTags: List<String>,
+    val selectedTags: Set<String> = emptySet(),
+    val isLoading: Boolean = false,
+)
+
 @HiltViewModel
 class EditorViewModel
     @Inject
@@ -49,6 +56,7 @@ class EditorViewModel
         private val dispatchers: DispatcherProvider,
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
         private val inlineAiUseCase: InlineAiUseCase? = null,
+        private val suggestTagsUseCase: SuggestTagsUseCase? = null,
     ) : ViewModel() {
         private val flushScope = CoroutineScope(SupervisorJob() + dispatchers.io)
         private var currentNoteId: String =
@@ -62,6 +70,8 @@ class EditorViewModel
         val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
         private val _inlineAiState = MutableStateFlow<InlineAiReviewState?>(null)
         val inlineAiState: StateFlow<InlineAiReviewState?> = _inlineAiState.asStateFlow()
+        private val _tagSuggestionState = MutableStateFlow<TagSuggestionState?>(null)
+        val tagSuggestionState: StateFlow<TagSuggestionState?> = _tagSuggestionState.asStateFlow()
 
         init {
             if (currentNoteId.isNotEmpty()) {
@@ -285,6 +295,44 @@ class EditorViewModel
 
         fun dismissInlineAi() {
             _inlineAiState.value = null
+        }
+
+        fun suggestTags() {
+            val body = _uiState.value.body
+            if (body.isBlank()) return
+            _tagSuggestionState.value =
+                TagSuggestionState(
+                    suggestedTags = emptyList(),
+                    isLoading = true,
+                )
+            viewModelScope.launch(dispatchers.io) {
+                val tags = suggestTagsUseCase?.execute(body) ?: emptyList()
+                _tagSuggestionState.value =
+                    TagSuggestionState(
+                        suggestedTags = tags,
+                        selectedTags = tags.toSet(),
+                        isLoading = false,
+                    )
+            }
+        }
+
+        fun applySuggestedTags(approvedTags: List<String>) {
+            val id = currentNoteId
+            if (id.isEmpty() || id == "new") {
+                _tagSuggestionState.value = null
+                return
+            }
+            viewModelScope.launch(dispatchers.io) {
+                val currentNote = repo.getNote(id)
+                val existingTags = currentNote?.tags ?: emptyList()
+                val merged = (existingTags + approvedTags).distinct()
+                repo.setTags(id, merged)
+                _tagSuggestionState.value = null
+            }
+        }
+
+        fun dismissTagSuggestion() {
+            _tagSuggestionState.value = null
         }
 
         private companion object {

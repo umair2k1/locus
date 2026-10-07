@@ -80,7 +80,7 @@ fun EditorScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val inlineAiState by viewModel.inlineAiState.collectAsState()
-
+    val tagSuggestionState by viewModel.tagSuggestionState.collectAsState()
     var showHistorySheet by remember { mutableStateOf(false) }
 
     val actions =
@@ -98,6 +98,7 @@ fun EditorScreen(
             onRunWholeNote = { action ->
                 viewModel.runInlineAi(action, viewModel.uiState.value.body, isSelection = false)
             },
+            onSuggestTags = { viewModel.suggestTags() },
         )
     EditorContent(
         uiState = uiState,
@@ -123,6 +124,14 @@ fun EditorScreen(
             onDismiss = { viewModel.dismissInlineAi() },
         )
     }
+
+    tagSuggestionState?.let { state ->
+        TagSuggestionSheet(
+            state = state,
+            onApply = { approvedTags -> viewModel.applySuggestedTags(approvedTags) },
+            onDismiss = { viewModel.dismissTagSuggestion() },
+        )
+    }
 }
 
 @Suppress("LongParameterList")
@@ -136,6 +145,7 @@ private data class EditorActions(
     val onNavigateToNote: ((String) -> Unit)? = null,
     val onRunInlineAi: (InlineAiAction, String, Boolean, Int, Int) -> Unit,
     val onRunWholeNote: (InlineAiAction) -> Unit,
+    val onSuggestTags: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -169,6 +179,7 @@ private fun EditorContent(
                 onDeleteNote = actions.onDeleteNote,
                 onOpenHistory = actions.onOpenHistory,
                 onRunWholeNote = actions.onRunWholeNote,
+                onSuggestTags = actions.onSuggestTags,
             )
         },
         modifier = modifier.fillMaxSize(),
@@ -227,6 +238,7 @@ private fun EditorTopBar(
     onDeleteNote: () -> Unit,
     onOpenHistory: () -> Unit,
     onRunWholeNote: (InlineAiAction) -> Unit,
+    onSuggestTags: () -> Unit,
 ) {
     TopAppBar(
         title = {},
@@ -301,6 +313,13 @@ private fun EditorTopBar(
                         onClick = {
                             menuExpanded = false
                             onRunWholeNote(InlineAiAction.EXTRACT_TASKS)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("AI: Suggest tags") },
+                        onClick = {
+                            menuExpanded = false
+                            onSuggestTags()
                         },
                     )
                 }
