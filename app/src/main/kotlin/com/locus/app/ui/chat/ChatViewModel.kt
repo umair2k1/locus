@@ -16,6 +16,9 @@ import com.locus.core.domain.notes.NoteType
 import com.locus.core.domain.notes.UuidV7
 import com.locus.core.domain.providers.ProviderMessage
 import com.locus.core.domain.providers.ProviderRole
+import com.locus.core.domain.routing.ModelRef
+import com.locus.core.domain.routing.RouteDecision
+import com.locus.core.domain.routing.Sec5TransitionGate
 import com.locus.core.domain.time.Clock
 import com.locus.core.domain.time.DispatcherProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -82,6 +85,16 @@ class ChatViewModel
 
         private val _undoableAction = MutableStateFlow<UndoableAction?>(null)
         val undoableAction: StateFlow<UndoableAction?> = _undoableAction.asStateFlow()
+
+        private val sec5TransitionGate: Sec5TransitionGate = Sec5TransitionGate()
+        private val sessionModelOverrides = mutableMapOf<String, ModelRef>()
+        private val sessionConfirmedModels = mutableMapOf<String, ModelRef>()
+        private var pendingMessageContent: String? = null
+
+        private val _pendingCloudTransition =
+            MutableStateFlow<RouteDecision.RequiresCloudTransitionConfirmation?>(null)
+        val pendingCloudTransition: StateFlow<RouteDecision.RequiresCloudTransitionConfirmation?> =
+            _pendingCloudTransition.asStateFlow()
 
         private var messagesJob: Job? = null
         private var generationJob: Job? = null
@@ -156,13 +169,20 @@ class ChatViewModel
         }
 
         fun selectModel(entry: RegistryEntry) {
+            val sessionId = _uiState.value.activeSessionId ?: "default"
+            if (!sessionConfirmedModels.containsKey(sessionId)) {
+                val current = _uiState.value.activeModel
+                sessionConfirmedModels[sessionId] =
+                    ModelRef(id = current.name, tier = current.tier, providerId = null)
+            }
+            sessionModelOverrides[sessionId] = entry.ref
             val modelInfo =
                 com.locus.core.domain.chat.ActiveModelInfo(
                     name = entry.ref.id,
                     tier = entry.ref.tier,
                     contextLength = entry.contextLength,
                 )
-            selectActiveModel(modelInfo)
+            _uiState.update { it.copy(activeModel = modelInfo) }
         }
 
         private fun updateMessagesObservation(sessionId: String?) {
@@ -182,6 +202,18 @@ class ChatViewModel
         fun selectSession(sessionId: String) {
             if (_uiState.value.activeSessionId == sessionId) return
             _uiState.update { it.copy(activeSessionId = sessionId) }
+            val override = sessionModelOverrides[sessionId]
+            if (override != null) {
+                _uiState.update {
+                    it.copy(
+                        activeModel =
+                            com.locus.core.domain.chat.ActiveModelInfo(
+                                name = override.id,
+                                tier = override.tier,
+                            ),
+                    )
+                }
+            }
             updateMessagesObservation(sessionId)
         }
 
@@ -197,6 +229,67 @@ class ChatViewModel
             val trimmed = content.trim()
             if (trimmed.isBlank() || _uiState.value.streamingText != null) return
 
+            val sessionId = _uiState.value.activeSessionId ?: "default"
+            val currentModel =
+                sessionModelOverrides[sessionId]
+                    ?: ModelRef(
+                        id = _uiState.value.activeModel.name,
+                        tier = _uiState.value.activeModel.tier,
+                        providerId = null,
+                    )
+            val confirmedModel = sessionConfirmedModels[sessionId]
+            if (confirmedModel != null) {
+                val decision = sec5TransitionGate.evaluate(confirmedModel, currentModel)
+                if (decision is RouteDecision.RequiresCloudTransitionConfirmation) {
+                    pendingMessageContent = trimmed
+                    _pendingCloudTransition.value = decision
+                    return
+                }
+            } else {
+                sessionConfirmedModels[sessionId] = currentModel
+            }
+
+            executeSend(trimmed)
+        }
+
+        fun confirmCloudTransition() {
+            val sessionId = _uiState.value.activeSessionId ?: "default"
+            val currentModel =
+                sessionModelOverrides[sessionId]
+                    ?: ModelRef(
+                        id = _uiState.value.activeModel.name,
+                        tier = _uiState.value.activeModel.tier,
+                        providerId = null,
+                    )
+            sessionConfirmedModels[sessionId] = currentModel
+            val msgToSend = pendingMessageContent
+            _pendingCloudTransition.value = null
+            pendingMessageContent = null
+            if (msgToSend != null) {
+                executeSend(msgToSend)
+            }
+        }
+
+        fun cancelCloudTransition() {
+            val sessionId = _uiState.value.activeSessionId ?: "default"
+            val confirmedModel = sessionConfirmedModels[sessionId]
+            if (confirmedModel != null) {
+                sessionModelOverrides[sessionId] = confirmedModel
+                _uiState.update {
+                    it.copy(
+                        activeModel =
+                            com.locus.core.domain.chat.ActiveModelInfo(
+                                name = confirmedModel.id,
+                                tier = confirmedModel.tier,
+                            ),
+                    )
+                }
+            }
+            _pendingCloudTransition.value = null
+            pendingMessageContent = null
+        }
+
+        private fun executeSend(trimmed: String) {
             generationJob =
                 viewModelScope.launch(dispatchers.io) {
                     val sessionId =

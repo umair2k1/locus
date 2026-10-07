@@ -81,6 +81,7 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     val pendingConfirmation by viewModel.pendingConfirmation.collectAsState()
     val undoableAction by viewModel.undoableAction.collectAsState()
+    val pendingCloudTransition by viewModel.pendingCloudTransition.collectAsState()
     var showSessionSheet by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
@@ -174,6 +175,14 @@ fun ChatScreen(
             PendingConfirmationDialog(
                 pending = pending,
                 onConfirm = { confirmed -> viewModel.confirmPendingAction(confirmed) },
+            )
+        }
+
+        pendingCloudTransition?.let { decision ->
+            CloudTransitionConfirmDialog(
+                decision = decision,
+                onConfirm = { viewModel.confirmCloudTransition() },
+                onDismiss = { viewModel.cancelCloudTransition() },
             )
         }
     }
