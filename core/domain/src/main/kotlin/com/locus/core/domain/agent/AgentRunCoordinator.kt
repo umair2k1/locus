@@ -1,8 +1,11 @@
 package com.locus.core.domain.agent
 
+import com.locus.core.domain.notes.Note
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.settings.AgentSettingsStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -41,12 +44,28 @@ class ToolConfirmationDeniedException(
 class AgentRunCoordinator
     @Inject
     constructor(
-        private val safetyClassifier: SafetyTierClassifier = SafetyTierClassifier(),
         private val settingsStore: AgentSettingsStore,
-        private var confirmationCallback: ConfirmationCallback? = null,
-        private val auditJournal: AuditJournal? = null,
-        private val noteRepository: NoteRepository? = null,
+        private val auditJournal: AuditJournal,
+        private val noteRepository: NoteRepository,
+        private val safetyClassifier: SafetyTierClassifier = SafetyTierClassifier(),
     ) {
+        private var confirmationCallback: ConfirmationCallback? = null
+
+        constructor(
+            settingsStore: AgentSettingsStore,
+            safetyClassifier: SafetyTierClassifier = SafetyTierClassifier(),
+            confirmationCallback: ConfirmationCallback? = null,
+            auditJournal: AuditJournal? = null,
+            noteRepository: NoteRepository? = null,
+        ) : this(
+            settingsStore = settingsStore,
+            auditJournal = auditJournal ?: NoOpAuditJournal,
+            noteRepository = noteRepository ?: NoOpNoteRepository,
+            safetyClassifier = safetyClassifier,
+        ) {
+            this.confirmationCallback = confirmationCallback
+        }
+
         private val _distinctNotesAffected = mutableSetOf<String>()
         private val syntheticNoteCounter = AtomicInteger(0)
 
@@ -295,3 +314,61 @@ class AgentRunCoordinator
             }
         }
     }
+
+private object NoOpAuditJournal : AuditJournal {
+    override suspend fun record(entry: AuditEntry) {
+        // no-op
+    }
+
+    override fun observeEntries(): Flow<List<AuditEntry>> = flowOf(emptyList())
+
+    override suspend fun revert(entryId: String) {
+        // no-op
+    }
+}
+
+private object NoOpNoteRepository : NoteRepository {
+    override fun observeNotesInFolder(folderPath: String): Flow<List<Note>> = flowOf(emptyList())
+
+    override fun observeAllNotes(): Flow<List<Note>> = flowOf(emptyList())
+
+    override suspend fun readBody(noteId: String) = ""
+
+    override suspend fun listFolders() = emptyList<String>()
+
+    override suspend fun createFolder(
+        parentPath: String,
+        name: String,
+    ) {
+        // no-op
+    }
+
+    override suspend fun createNote(
+        folderPath: String,
+        title: String,
+        type: com.locus.core.domain.notes.NoteType,
+    ): com.locus.core.domain.notes.Note = error("No-op")
+
+    override suspend fun edit(
+        noteId: String,
+        newBody: String,
+    ) {
+        // no-op
+    }
+
+    override suspend fun setPinned(
+        noteId: String,
+        pinned: Boolean,
+    ) {
+        // no-op
+    }
+
+    override suspend fun setColor(
+        noteId: String,
+        color: String?,
+    ) {
+        // no-op
+    }
+
+    override suspend fun rescan(): com.locus.core.domain.notes.RescanReport = error("No-op")
+}

@@ -167,6 +167,9 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateToEditor = { noteId ->
                 navController.navigate(LocusDestinations.editorRoute(noteId))
             },
+            onNavigateToAuditJournal = {
+                navController.navigate(LocusDestinations.AUDIT_JOURNAL_ROUTE)
+            },
         )
     }
     composable(LocusDestinations.MODEL_MANAGER_ROUTE) {

@@ -69,15 +69,18 @@ private const val SMALL_CORNER_RADIUS = 4
 private const val BANNER_CORNER_RADIUS = 8
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 fun ChatScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEditor: (String) -> Unit,
+    onNavigateToAuditJournal: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val pendingConfirmation by viewModel.pendingConfirmation.collectAsState()
+    val undoableAction by viewModel.undoableAction.collectAsState()
     var showSessionSheet by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
@@ -107,17 +110,28 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            ChatInputBar(
-                inputText = inputText,
-                onInputTextChange = { inputText = it },
-                onSend = {
-                    val messageToSend = inputText
-                    inputText = ""
-                    viewModel.sendMessage(messageToSend)
-                },
-                onStop = { viewModel.stopGeneration() },
-                isStreaming = uiState.streamingText != null,
-            )
+            Column {
+                undoableAction?.let { action ->
+                    UndoableActionCard(
+                        action = action,
+                        onUndo = { viewModel.undoAction(action.entryId) },
+                        onDismiss = { viewModel.dismissUndo() },
+                        onViewJournal = onNavigateToAuditJournal,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+                ChatInputBar(
+                    inputText = inputText,
+                    onInputTextChange = { inputText = it },
+                    onSend = {
+                        val messageToSend = inputText
+                        inputText = ""
+                        viewModel.sendMessage(messageToSend)
+                    },
+                    onStop = { viewModel.stopGeneration() },
+                    isStreaming = uiState.streamingText != null,
+                )
+            }
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
@@ -153,6 +167,13 @@ fun ChatScreen(
                     }
                 },
                 modifier = Modifier.weight(1f),
+            )
+        }
+
+        pendingConfirmation?.let { pending ->
+            PendingConfirmationDialog(
+                pending = pending,
+                onConfirm = { confirmed -> viewModel.confirmPendingAction(confirmed) },
             )
         }
     }

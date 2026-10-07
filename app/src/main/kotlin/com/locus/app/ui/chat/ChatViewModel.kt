@@ -20,6 +20,7 @@ import com.locus.core.domain.time.Clock
 import com.locus.core.domain.time.DispatcherProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -57,7 +58,7 @@ sealed interface ChatEffect {
 }
 
 @HiltViewModel
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 class ChatViewModel
     @Inject
     constructor(
@@ -69,11 +70,18 @@ class ChatViewModel
         private val activeModelRepository: com.locus.core.domain.chat.ActiveModelRepository,
         private val modelRegistry: ModelRegistry? = null,
         private val thermalMonitor: ThermalMonitor? = null,
+        private val coordinator: com.locus.core.domain.agent.AgentRunCoordinator? = null,
+        private val auditJournal: com.locus.core.domain.agent.AuditJournal? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ChatUiState())
         val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
         private val _effects = Channel<ChatEffect>(Channel.BUFFERED)
         val effects: Flow<ChatEffect> = _effects.receiveAsFlow()
+        private val _pendingConfirmation = MutableStateFlow<PendingConfirmation?>(null)
+        val pendingConfirmation: StateFlow<PendingConfirmation?> = _pendingConfirmation.asStateFlow()
+
+        private val _undoableAction = MutableStateFlow<UndoableAction?>(null)
+        val undoableAction: StateFlow<UndoableAction?> = _undoableAction.asStateFlow()
 
         private var messagesJob: Job? = null
         private var generationJob: Job? = null
@@ -83,6 +91,7 @@ class ChatViewModel
             observeActiveModel()
             observeModelRegistry()
             observeThermalStatus()
+            setupAgentCoordinator()
         }
 
         private fun observeSessions() {
@@ -346,5 +355,37 @@ class ChatViewModel
             } else {
                 clean.ifBlank { "Chat Note" }
             }
+        }
+
+        private fun setupAgentCoordinator() {
+            coordinator?.setConfirmationCallback { request ->
+                val deferred = CompletableDeferred<Boolean>()
+                _pendingConfirmation.value = PendingConfirmation(request, deferred)
+                try {
+                    deferred.await()
+                } finally {
+                    _pendingConfirmation.value = null
+                }
+            }
+        }
+
+        fun confirmPendingAction(confirmed: Boolean) {
+            _pendingConfirmation.value?.deferred?.complete(confirmed)
+            _pendingConfirmation.value = null
+        }
+
+        fun undoAction(entryId: String) {
+            viewModelScope.launch(dispatchers.io) {
+                auditJournal?.revert(entryId)
+                _undoableAction.value = null
+            }
+        }
+
+        fun dismissUndo() {
+            _undoableAction.value = null
+        }
+
+        fun showUndoableAction(action: UndoableAction) {
+            _undoableAction.value = action
         }
     }
