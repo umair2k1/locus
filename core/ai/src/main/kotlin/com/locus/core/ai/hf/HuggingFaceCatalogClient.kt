@@ -55,7 +55,11 @@ class HuggingFaceCatalogClient(
         private const val SHA256_HEX_LENGTH = 64
     }
 
-    suspend fun searchGgufRepos(query: String): List<HfRepoSummary> =
+    suspend fun searchGgufRepos(
+        query: String,
+        sort: String? = null,
+        direction: Int? = null,
+    ): List<HfRepoSummary> =
         withContext(ioDispatcher) {
             val cleanBase = baseUrl.trim().trimEnd('/')
             val httpUrl = cleanBase.toHttpUrlOrNull() ?: ("https://$cleanBase").toHttpUrl()
@@ -69,6 +73,13 @@ class HuggingFaceCatalogClient(
             val trimmedQuery = query.trim()
             if (trimmedQuery.isNotEmpty()) {
                 urlBuilder.addQueryParameter("search", trimmedQuery)
+            }
+
+            if (!sort.isNullOrBlank()) {
+                urlBuilder.addQueryParameter("sort", sort)
+                if (direction != null) {
+                    urlBuilder.addQueryParameter("direction", direction.toString())
+                }
             }
 
             val request =

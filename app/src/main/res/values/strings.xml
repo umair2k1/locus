@@ -138,6 +138,13 @@
     <string name="models_browse_title">Browse Hugging Face</string>
     <string name="models_search_placeholder">Search GGUF models…</string>
     <string name="models_search_button">Search</string>
+    <string name="models_browse_hf_button">Browse Hugging Face</string>
+    <string name="models_hide_hf_button">Hide Hugging Face</string>
+    <string name="models_filter_label">Filter</string>
+    <string name="models_sort_label">Sort</string>
+    <string name="models_clear_search">Clear search</string>
+    <string name="models_no_repos_found">No models found</string>
+    <string name="models_no_quants_found">No quantization files match filter</string>
     <string name="models_download_button">Download</string>
     <string name="models_downloading_button">Downloading</string>
     <string name="models_downloaded_badge">Downloaded</string>

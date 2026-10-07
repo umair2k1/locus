@@ -104,6 +104,19 @@ class HuggingFaceCatalogClientTest {
         }
 
     @Test
+    fun searchGgufRepos_withSortAndDirection_includesParamsInUrl() =
+        runTest(testDispatcher) {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+
+            val results = client.searchGgufRepos("qwen", sort = "downloads", direction = -1)
+
+            val recordedRequest = server.takeRequest()
+            assertEquals("GET", recordedRequest.method)
+            assertEquals("/api/models?filter=gguf&search=qwen&sort=downloads&direction=-1", recordedRequest.path)
+            assertTrue(results.isEmpty())
+        }
+
+    @Test
     fun searchGgufRepos_httpError_throwsIOException() =
         runTest(testDispatcher) {
             server.enqueue(MockResponse().setResponseCode(500).setBody("Internal Server Error"))

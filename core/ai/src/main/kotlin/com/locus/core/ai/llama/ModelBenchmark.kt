@@ -7,6 +7,8 @@ import javax.inject.Singleton
 
 private const val NANOS_PER_SECOND = 1_000_000_000.0
 private const val NANOS_PER_MILLI = 1_000_000L
+private const val EMBEDDING_BENCHMARK_ESTIMATED_TOKENS = 35
+private const val EMBEDDING_BENCHMARK_ITERATIONS = 5
 
 @Singleton
 class ModelBenchmark
@@ -17,6 +19,21 @@ class ModelBenchmark
         private val deviceProvider: DeviceFingerprintProvider,
     ) {
         suspend fun run(
+            modelId: String,
+            path: String,
+        ): BenchmarkResult {
+            val isEmbeddingModel =
+                modelId.contains("embedding", ignoreCase = true) ||
+                    path.contains("embedding", ignoreCase = true)
+
+            return if (isEmbeddingModel) {
+                runEmbeddingBenchmark(modelId, path)
+            } else {
+                runChatBenchmark(modelId, path)
+            }
+        }
+
+        private suspend fun runChatBenchmark(
             modelId: String,
             path: String,
         ): BenchmarkResult {
@@ -45,6 +62,53 @@ class ModelBenchmark
             return BenchmarkResult(
                 tokensPerSecond = tokensPerSecond,
                 totalTokens = tokenCount,
+                durationMs = durationMs,
+            )
+        }
+
+        private suspend fun runEmbeddingBenchmark(
+            modelId: String,
+            path: String,
+        ): BenchmarkResult {
+            val loadResult = llamaRuntime.loadModel(path, ModelKind.EMBEDDING)
+            check(loadResult.isSuccess) {
+                "Failed to load embedding model for benchmark from path: $path: " +
+                    "${loadResult.exceptionOrNull()?.message}"
+            }
+
+            // Benchmark embedding inference throughput on representative chunk text (~100 tokens)
+            val cannedChunk =
+                "Offline-first software architectures ensure local resilience, low latency, " +
+                    "and continuous data accessibility by design. " +
+                    "Local-first applications store state on-device and synchronize " +
+                    "conflict-free replicas asynchronously when connectivity is present."
+            val estimatedChunkTokens = EMBEDDING_BENCHMARK_ESTIMATED_TOKENS
+
+            // Warm-up single pass
+            llamaRuntime.embed(cannedChunk)
+
+            val iterations = EMBEDDING_BENCHMARK_ITERATIONS
+            val startNanos = System.nanoTime()
+            repeat(iterations) {
+                val embedResult = llamaRuntime.embed(cannedChunk)
+                check(embedResult.isSuccess) {
+                    "Failed to generate benchmark embeddings: ${embedResult.exceptionOrNull()?.message}"
+                }
+            }
+            val elapsedNanos = System.nanoTime() - startNanos
+            val elapsedSeconds = elapsedNanos.toDouble() / NANOS_PER_SECOND
+            val durationMs = elapsedNanos / NANOS_PER_MILLI
+            val totalTokens = estimatedChunkTokens * iterations
+            val tokensPerSecond =
+                if (elapsedSeconds > 0.0 && totalTokens > 0) totalTokens / elapsedSeconds else 0.0
+
+            val device = deviceProvider.getDeviceFingerprint()
+            val benchmarkedAt = System.currentTimeMillis()
+            metaRepository.saveBenchmarkResult(modelId, device, tokensPerSecond, benchmarkedAt)
+
+            return BenchmarkResult(
+                tokensPerSecond = tokensPerSecond,
+                totalTokens = totalTokens,
                 durationMs = durationMs,
             )
         }

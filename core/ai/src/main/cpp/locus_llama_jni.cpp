@@ -40,6 +40,16 @@ static void internal_unload() {
         g_model = nullptr;
     }
 }
+static void locus_llama_log_callback(ggml_log_level level, const char* text, void* /* user_data */) {
+    if (text == nullptr) return;
+    if (level == GGML_LOG_LEVEL_ERROR) {
+        LOGE("%s", text);
+    } else if (level == GGML_LOG_LEVEL_WARN) {
+        LOGI("[WARN] %s", text);
+    } else if (level == GGML_LOG_LEVEL_INFO) {
+        LOGI("%s", text);
+    }
+}
 
 extern "C" {
 
@@ -68,6 +78,7 @@ Java_com_locus_core_ai_llama_LlamaRuntime_nativeLoadModel(
 
     llama_backend_init();
 
+    llama_log_set(locus_llama_log_callback, nullptr);
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0; // CPU-first: M-1 requirement
 

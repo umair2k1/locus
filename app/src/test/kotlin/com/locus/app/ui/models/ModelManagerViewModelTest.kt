@@ -13,7 +13,10 @@ import com.locus.core.domain.models.ModelMetaRepository
 import com.locus.core.domain.models.ModelRecommendation
 import com.locus.core.domain.models.ModelRepoSummary
 import com.locus.core.domain.models.ModelStorageStats
+import com.locus.core.domain.models.QuantFilter
+import com.locus.core.domain.models.QuantSortOrder
 import com.locus.core.domain.models.RecommendationRanker
+import com.locus.core.domain.models.RepoSortOrder
 import com.locus.core.domain.settings.DismissedRecommendationsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,7 +57,7 @@ class ModelManagerViewModelTest {
     }
 
     @Test
-    fun init_loadsStorageStatsDownloadedModelsAndDefaultSearch() =
+    fun init_loadsStorageStatsAndDownloadedModelsWithoutSearchingRepos() =
         runTest {
             advanceUntilIdle()
 
@@ -62,9 +65,150 @@ class ModelManagerViewModelTest {
             assertEquals(1024L, state.storageStats.totalUsedBytes)
             assertEquals(1, state.downloadedModels.size)
             assertEquals("qwen-1.gguf", state.downloadedModels[0].filename)
-            assertEquals(1, state.searchResults.size)
-            assertEquals("Qwen/Qwen2.5-0.5B-Instruct-GGUF", state.searchResults[0].id)
+            assertTrue(state.searchResults.isEmpty())
+            assertFalse(state.isBrowseHfVisible)
+            assertEquals("", state.searchQuery)
             assertFalse(state.isSearchingRepos)
+        }
+
+    @Test
+    fun toggleBrowseHf_togglesVisibility_andTriggersSearchWhenEmpty() =
+        runTest {
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.isBrowseHfVisible)
+            assertTrue(
+                viewModel.uiState.value.searchResults
+                    .isEmpty(),
+            )
+
+            viewModel.toggleBrowseHf()
+            assertTrue(viewModel.uiState.value.isBrowseHfVisible)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.searchResults.size)
+            assertEquals(
+                "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+                viewModel.uiState.value.searchResults[0]
+                    .id,
+            )
+
+            viewModel.toggleBrowseHf()
+            assertFalse(viewModel.uiState.value.isBrowseHfVisible)
+        }
+
+    @Test
+    fun selectRecommendation_setsBrowseHfVisibleTrue_andSelectsRepo() =
+        runTest {
+            advanceUntilIdle()
+            val rec =
+                ModelRecommendation(
+                    id = "rec-1",
+                    name = "Qwen 2.5",
+                    repo = "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+                    filename = "qwen2.5-0.5b-q4_k_m.gguf",
+                    sha256 = "sha-123",
+                    sizeBytes = 398_000_000L,
+                    contextLength = 4096,
+                    description = "Test recommendation",
+                    task = "Chat",
+                )
+
+            viewModel.selectRecommendation(rec)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isBrowseHfVisible)
+            assertEquals(
+                "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+                viewModel.uiState.value.selectedRepo
+                    ?.id,
+            )
+            assertEquals(2, viewModel.uiState.value.quantFiles.size)
+        }
+
+    @Test
+    fun setRepoSortOrder_updatesSortOrder_andTriggersSearch() =
+        runTest {
+            advanceUntilIdle()
+            viewModel.setRepoSortOrder(RepoSortOrder.LIKES)
+            advanceUntilIdle()
+
+            assertEquals(RepoSortOrder.LIKES, viewModel.uiState.value.repoSortOrder)
+            assertEquals(RepoSortOrder.LIKES, fakeRepo.lastSearchSort)
+        }
+
+    @Test
+    fun setRepoFilter_updatesFilterAndQuery_andTriggersSearch() =
+        runTest {
+            advanceUntilIdle()
+            viewModel.setRepoFilter("Llama")
+            advanceUntilIdle()
+
+            assertEquals("Llama", viewModel.uiState.value.activeRepoFilter)
+            assertEquals("Llama", viewModel.uiState.value.searchQuery)
+            assertEquals(1, viewModel.uiState.value.searchResults.size)
+            assertEquals(
+                "meta-llama/Llama-3.2-1B-Instruct-GGUF",
+                viewModel.uiState.value.searchResults[0]
+                    .id,
+            )
+
+            viewModel.setRepoFilter("All")
+            advanceUntilIdle()
+            assertEquals("All", viewModel.uiState.value.activeRepoFilter)
+            assertEquals("", viewModel.uiState.value.searchQuery)
+        }
+
+    @Test
+    fun quantFilterAndSort_correctlyFiltersAndSortsQuants() =
+        runTest {
+            advanceUntilIdle()
+            val repo = ModelRepoSummary(id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF")
+            viewModel.selectRepo(repo)
+            advanceUntilIdle()
+
+            assertEquals(2, viewModel.uiState.value.filteredQuantFiles.size)
+
+            viewModel.setQuantFilter(QuantFilter.Q4)
+            assertEquals(1, viewModel.uiState.value.filteredQuantFiles.size)
+            assertEquals(
+                "qwen2.5-0.5b-q4_k_m.gguf",
+                viewModel.uiState.value.filteredQuantFiles[0]
+                    .name,
+            )
+
+            viewModel.setQuantFilter(QuantFilter.Q8)
+            assertEquals(1, viewModel.uiState.value.filteredQuantFiles.size)
+            assertEquals(
+                "qwen2.5-0.5b-q8_0.gguf",
+                viewModel.uiState.value.filteredQuantFiles[0]
+                    .name,
+            )
+
+            viewModel.setQuantFilter(QuantFilter.ALL)
+            viewModel.setQuantSortOrder(QuantSortOrder.SIZE_DESC)
+            assertEquals(
+                "qwen2.5-0.5b-q8_0.gguf",
+                viewModel.uiState.value.filteredQuantFiles[0]
+                    .name,
+            )
+            assertEquals(
+                "qwen2.5-0.5b-q4_k_m.gguf",
+                viewModel.uiState.value.filteredQuantFiles[1]
+                    .name,
+            )
+        }
+
+    @Test
+    fun clearSearch_resetsQuery_andSearchesEmpty() =
+        runTest {
+            advanceUntilIdle()
+            viewModel.onSearchQueryChange("test-query")
+            assertEquals("test-query", viewModel.uiState.value.searchQuery)
+
+            viewModel.clearSearch()
+            advanceUntilIdle()
+            assertEquals("", viewModel.uiState.value.searchQuery)
+            assertEquals("", fakeRepo.lastSearchQuery)
         }
 
     @Test
@@ -478,9 +622,17 @@ private class FakeModelManagerRepository : ModelManagerRepository {
         downloadsFlow.value = list
     }
 
-    override suspend fun searchRepos(query: String): Result<List<ModelRepoSummary>> =
-        Result.success(
-            if (query.contains("llama")) {
+    var lastSearchQuery: String? = null
+    var lastSearchSort: RepoSortOrder? = null
+
+    override suspend fun searchRepos(
+        query: String,
+        sort: RepoSortOrder?,
+    ): Result<List<ModelRepoSummary>> {
+        lastSearchQuery = query
+        lastSearchSort = sort
+        return Result.success(
+            if (query.contains("llama", ignoreCase = true)) {
                 listOf(
                     ModelRepoSummary(
                         id = "meta-llama/Llama-3.2-1B-Instruct-GGUF",
@@ -500,6 +652,7 @@ private class FakeModelManagerRepository : ModelManagerRepository {
                 )
             },
         )
+    }
 
     override suspend fun listQuantFiles(repoId: String): Result<List<ModelFileInfo>> =
         Result.success(

@@ -3,7 +3,10 @@ package com.locus.core.domain.models
 import kotlinx.coroutines.flow.Flow
 
 interface ModelManagerRepository {
-    suspend fun searchRepos(query: String): Result<List<ModelRepoSummary>>
+    suspend fun searchRepos(
+        query: String,
+        sort: RepoSortOrder? = null,
+    ): Result<List<ModelRepoSummary>>
 
     suspend fun listQuantFiles(repoId: String): Result<List<ModelFileInfo>>
 

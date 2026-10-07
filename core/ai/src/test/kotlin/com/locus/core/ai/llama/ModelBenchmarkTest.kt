@@ -66,6 +66,49 @@ class ModelBenchmarkTest {
         }
 
     @Test
+    fun run_loadsEmbeddingModelRunsEmbedAndStoresTokPerSecond() =
+        runTest {
+            var loadedPath: String? = null
+            var loadedKind: ModelKind? = null
+            var embedCallCount = 0
+
+            val fakeRuntime =
+                object : LlamaRuntime() {
+                    override suspend fun loadModel(
+                        path: String,
+                        kind: ModelKind,
+                    ): Result<Unit> {
+                        loadedPath = path
+                        loadedKind = kind
+                        return Result.success(Unit)
+                    }
+
+                    override suspend fun embed(text: String): Result<FloatArray> {
+                        embedCallCount++
+                        return Result.success(FloatArray(512) { 0.1f })
+                    }
+                }
+
+            val fakeMetaRepo = FakeModelMetaRepository()
+            val fakeDeviceProvider =
+                object : DeviceFingerprintProvider {
+                    override fun getDeviceFingerprint(): String = "test-device-fingerprint"
+                }
+
+            val benchmark = ModelBenchmark(fakeRuntime, fakeMetaRepo, fakeDeviceProvider)
+            val result = benchmark.run("embeddinggemma-2-Q8_0.gguf", "/data/models/embeddinggemma-2-Q8_0.gguf")
+
+            assertEquals("/data/models/embeddinggemma-2-Q8_0.gguf", loadedPath)
+            assertEquals(ModelKind.EMBEDDING, loadedKind)
+            assertEquals(6, embedCallCount) // 1 warm-up + 5 benchmark iterations
+            assertTrue("Total tokens should be positive", result.totalTokens > 0)
+            assertTrue("Tokens per second should be positive", result.tokensPerSecond > 0.0)
+            assertEquals("embeddinggemma-2-Q8_0.gguf", fakeMetaRepo.lastSavedModelId)
+            assertEquals("test-device-fingerprint", fakeMetaRepo.lastSavedDevice)
+            assertEquals(result.tokensPerSecond, fakeMetaRepo.lastSavedTokensPerSecond ?: 0.0, 1e-6)
+        }
+
+    @Test
     fun run_whenModelLoadFails_throwsIllegalStateException() =
         runTest {
             val fakeRuntime =

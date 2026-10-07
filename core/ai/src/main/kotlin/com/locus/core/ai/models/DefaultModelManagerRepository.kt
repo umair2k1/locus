@@ -21,6 +21,7 @@ import com.locus.core.domain.models.ModelRecommendation
 import com.locus.core.domain.models.ModelRepoSummary
 import com.locus.core.domain.models.ModelStorageStats
 import com.locus.core.domain.models.RecommendationRanker
+import com.locus.core.domain.models.RepoSortOrder
 import com.locus.core.domain.models.TaskRequirements
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -42,9 +43,19 @@ class DefaultModelManagerRepository
         private val catalogRepository: CatalogRepository,
         private val recommendationRanker: RecommendationRanker,
     ) : ModelManagerRepository {
-        override suspend fun searchRepos(query: String): Result<List<ModelRepoSummary>> =
+        override suspend fun searchRepos(
+            query: String,
+            sort: RepoSortOrder?,
+        ): Result<List<ModelRepoSummary>> =
             runCatching {
-                hfClient.searchGgufRepos(query).map { summary ->
+                val hfSort =
+                    when (sort) {
+                        RepoSortOrder.DOWNLOADS -> "downloads"
+                        RepoSortOrder.LIKES -> "likes"
+                        RepoSortOrder.NAME, null -> null
+                    }
+                val direction = if (hfSort != null) -1 else null
+                hfClient.searchGgufRepos(query = query, sort = hfSort, direction = direction).map { summary ->
                     ModelRepoSummary(
                         id = summary.id,
                         description = summary.description,

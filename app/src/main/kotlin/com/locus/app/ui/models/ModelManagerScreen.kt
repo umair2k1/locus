@@ -2,6 +2,7 @@
 
 package com.locus.app.ui.models
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -62,6 +64,9 @@ import com.locus.core.domain.models.ModelMeta
 import com.locus.core.domain.models.ModelRecommendation
 import com.locus.core.domain.models.ModelRepoSummary
 import com.locus.core.domain.models.ModelStorageStats
+import com.locus.core.domain.models.QuantFilter
+import com.locus.core.domain.models.QuantSortOrder
+import com.locus.core.domain.models.RepoSortOrder
 import java.util.Locale
 
 private const val MAX_RATING_STARS = 5
@@ -74,8 +79,14 @@ private data class ModelManagerActions(
     val onDeleteModelClick: (DownloadedModel) -> Unit,
     val onCancelDownload: (String) -> Unit,
     val onRemoveDownload: (String, String) -> Unit,
+    val onToggleBrowseHf: () -> Unit,
     val onSearchQueryChange: (String) -> Unit,
+    val onClearSearch: () -> Unit,
     val onSearch: () -> Unit,
+    val onSetRepoSortOrder: (RepoSortOrder) -> Unit,
+    val onSetRepoFilter: (String) -> Unit,
+    val onSetQuantFilter: (QuantFilter) -> Unit,
+    val onSetQuantSortOrder: (QuantSortOrder) -> Unit,
     val onSelectRepo: (ModelRepoSummary) -> Unit,
     val onBackToRepos: () -> Unit,
     val onStartDownload: (ModelFileInfo) -> Unit,
@@ -98,6 +109,7 @@ fun formatByteSize(bytes: Long): String {
     }
 }
 
+@Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelManagerScreen(
@@ -122,8 +134,14 @@ fun ModelManagerScreen(
                 onDeleteModelClick = { modelPendingDelete = it },
                 onCancelDownload = viewModel::cancelDownload,
                 onRemoveDownload = viewModel::removeDownload,
+                onToggleBrowseHf = viewModel::toggleBrowseHf,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
+                onClearSearch = viewModel::clearSearch,
                 onSearch = { viewModel.searchRepos() },
+                onSetRepoSortOrder = viewModel::setRepoSortOrder,
+                onSetRepoFilter = viewModel::setRepoFilter,
+                onSetQuantFilter = viewModel::setQuantFilter,
+                onSetQuantSortOrder = viewModel::setQuantSortOrder,
                 onSelectRepo = viewModel::selectRepo,
                 onBackToRepos = viewModel::clearSelectedRepo,
                 onStartDownload = { file ->
@@ -222,10 +240,25 @@ private fun ModelManagerContent(
             )
         }
 
-        BrowseHuggingFaceSection(
-            uiState = uiState,
-            actions = actions,
-        )
+        if (uiState.isBrowseHfVisible) {
+            BrowseHuggingFaceSection(
+                uiState = uiState,
+                actions = actions,
+            )
+        } else {
+            Button(
+                onClick = actions.onToggleBrowseHf,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.models_browse_hf_button))
+            }
+        }
     }
 }
 
@@ -775,11 +808,20 @@ private fun BrowseHuggingFaceSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = stringResource(R.string.models_browse_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.models_browse_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            TextButton(onClick = actions.onToggleBrowseHf) {
+                Text(stringResource(R.string.models_hide_hf_button))
+            }
+        }
 
         if (uiState.selectedRepo == null) {
             RepoSearchBlock(uiState = uiState, actions = actions)
@@ -794,13 +836,28 @@ private fun RepoSearchBlock(
     uiState: ModelManagerUiState,
     actions: ModelManagerActions,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         OutlinedTextField(
             value = uiState.searchQuery,
             onValueChange = actions.onSearchQueryChange,
             placeholder = { Text(stringResource(R.string.models_search_placeholder)) },
             singleLine = true,
             modifier = Modifier.weight(1f),
+            trailingIcon = {
+                if (uiState.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = actions.onClearSearch) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.models_clear_search),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            },
         )
         Button(onClick = actions.onSearch) {
             Icon(
@@ -809,6 +866,16 @@ private fun RepoSearchBlock(
             )
         }
     }
+
+    RepoFilterChipsRow(
+        activeFilter = uiState.activeRepoFilter,
+        onFilterSelected = actions.onSetRepoFilter,
+    )
+
+    RepoSortChipsRow(
+        activeSort = uiState.repoSortOrder,
+        onSortSelected = actions.onSetRepoSortOrder,
+    )
 
     if (uiState.isSearchingRepos) {
         Box(
@@ -825,8 +892,72 @@ private fun RepoSearchBlock(
         )
     }
 
-    uiState.searchResults.forEach { repo ->
+    val isSearchIdle = !uiState.isSearchingRepos && uiState.searchError == null
+    val isFilterEmpty = uiState.searchResults.isNotEmpty() && uiState.displayedSearchResults.isEmpty()
+    if (isSearchIdle && isFilterEmpty) {
+        Text(
+            text = stringResource(R.string.models_no_repos_found),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+    }
+
+    uiState.displayedSearchResults.forEach { repo ->
         RepoSummaryCard(repo = repo, onClick = { actions.onSelectRepo(repo) })
+    }
+}
+
+@Composable
+private fun RepoFilterChipsRow(
+    activeFilter: String,
+    onFilterSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.models_filter_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        REPO_FILTER_PRESETS.forEach { preset ->
+            val isSelected = activeFilter.equals(preset, ignoreCase = true)
+            FilterChip(
+                selected = isSelected,
+                onClick = { onFilterSelected(preset) },
+                label = { Text(preset) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RepoSortChipsRow(
+    activeSort: RepoSortOrder,
+    onSortSelected: (RepoSortOrder) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.models_sort_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        RepoSortOrder.entries.forEach { order ->
+            FilterChip(
+                selected = activeSort == order,
+                onClick = { onSortSelected(order) },
+                label = { Text(order.displayName) },
+            )
+        }
     }
 }
 
@@ -892,6 +1023,16 @@ private fun QuantPickerBlock(
             TextButton(onClick = actions.onBackToRepos) { Text("← Back") }
         }
 
+        QuantFilterChipsRow(
+            activeFilter = uiState.quantFilter,
+            onFilterSelected = actions.onSetQuantFilter,
+        )
+
+        QuantSortChipsRow(
+            activeSort = uiState.quantSortOrder,
+            onSortSelected = actions.onSetQuantSortOrder,
+        )
+
         if (uiState.isLoadingQuants) {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -907,7 +1048,18 @@ private fun QuantPickerBlock(
             )
         }
 
-        uiState.quantFiles.forEach { file ->
+        val isQuantsIdle = !uiState.isLoadingQuants && uiState.quantsError == null
+        val isQuantFilterEmpty = uiState.quantFiles.isNotEmpty() && uiState.filteredQuantFiles.isEmpty()
+        if (isQuantsIdle && isQuantFilterEmpty) {
+            Text(
+                text = stringResource(R.string.models_no_quants_found),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+
+        uiState.filteredQuantFiles.forEach { file ->
             val isDownloaded =
                 uiState.downloadedModels.any {
                     it.filename.equals(file.name, ignoreCase = true)
@@ -922,6 +1074,58 @@ private fun QuantPickerBlock(
                 isDownloaded = isDownloaded,
                 isDownloading = isDownloading,
                 onDownload = { actions.onStartDownload(file) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuantFilterChipsRow(
+    activeFilter: QuantFilter,
+    onFilterSelected: (QuantFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.models_filter_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        QuantFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = activeFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.displayName) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuantSortChipsRow(
+    activeSort: QuantSortOrder,
+    onSortSelected: (QuantSortOrder) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.models_sort_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        QuantSortOrder.entries.forEach { sortOrder ->
+            FilterChip(
+                selected = activeSort == sortOrder,
+                onClick = { onSortSelected(sortOrder) },
+                label = { Text(sortOrder.displayName) },
             )
         }
     }

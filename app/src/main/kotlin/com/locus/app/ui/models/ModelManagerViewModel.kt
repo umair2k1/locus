@@ -11,7 +11,10 @@ import com.locus.core.domain.models.ModelMeta
 import com.locus.core.domain.models.ModelRecommendation
 import com.locus.core.domain.models.ModelRepoSummary
 import com.locus.core.domain.models.ModelStorageStats
+import com.locus.core.domain.models.QuantFilter
+import com.locus.core.domain.models.QuantSortOrder
 import com.locus.core.domain.models.RecommendationRanker
+import com.locus.core.domain.models.RepoSortOrder
 import com.locus.core.domain.search.ChunkRepository
 import com.locus.core.domain.search.IndexingCoordinator
 import com.locus.core.domain.settings.DismissedRecommendationsStore
@@ -34,25 +37,68 @@ data class PendingEmbeddingSwitch(
     val isMeasured: Boolean,
 )
 
+val REPO_FILTER_PRESETS = listOf("All", "Qwen", "Llama", "DeepSeek", "Gemma", "Mistral", "Embedding")
+
 data class ModelManagerUiState(
     val storageStats: ModelStorageStats = ModelStorageStats(0L, 0L, 0L),
     val downloadedModels: List<DownloadedModel> = emptyList(),
     val activeDownloads: List<ModelDownloadProgress> = emptyList(),
     val recommendations: List<ModelRecommendation> = emptyList(),
-    val searchQuery: String = "qwen",
+    val isBrowseHfVisible: Boolean = false,
+    val searchQuery: String = "",
     val isSearchingRepos: Boolean = false,
     val searchResults: List<ModelRepoSummary> = emptyList(),
     val searchError: String? = null,
+    val repoSortOrder: RepoSortOrder = RepoSortOrder.DOWNLOADS,
+    val activeRepoFilter: String = "All",
     val selectedRepo: ModelRepoSummary? = null,
     val isLoadingQuants: Boolean = false,
     val quantFiles: List<ModelFileInfo> = emptyList(),
     val quantsError: String? = null,
+    val quantFilter: QuantFilter = QuantFilter.ALL,
+    val quantSortOrder: QuantSortOrder = QuantSortOrder.SIZE_ASC,
     val modelMetaMap: Map<String, ModelMeta> = emptyMap(),
     val benchmarkingModelId: String? = null,
     val userMessage: String? = null,
     val pendingEmbeddingSwitch: PendingEmbeddingSwitch? = null,
     val isReindexing: Boolean = false,
-)
+) {
+    val displayedSearchResults: List<ModelRepoSummary>
+        get() {
+            val list =
+                when {
+                    activeRepoFilter.isBlank() || activeRepoFilter.equals("All", ignoreCase = true) -> searchResults
+                    else ->
+                        searchResults.filter {
+                            it.id.contains(activeRepoFilter, ignoreCase = true) ||
+                                it.description.contains(activeRepoFilter, ignoreCase = true)
+                        }
+                }
+            return when (repoSortOrder) {
+                RepoSortOrder.DOWNLOADS -> list.sortedByDescending { it.downloads }
+                RepoSortOrder.LIKES -> list.sortedByDescending { it.likes }
+                RepoSortOrder.NAME -> list.sortedBy { it.id.lowercase() }
+            }
+        }
+
+    val filteredQuantFiles: List<ModelFileInfo>
+        get() {
+            val filtered =
+                when (quantFilter) {
+                    QuantFilter.ALL -> quantFiles
+                    QuantFilter.Q4 -> quantFiles.filter { it.name.contains("q4", ignoreCase = true) }
+                    QuantFilter.Q5 -> quantFiles.filter { it.name.contains("q5", ignoreCase = true) }
+                    QuantFilter.Q8 -> quantFiles.filter { it.name.contains("q8", ignoreCase = true) }
+                    QuantFilter.Q6 -> quantFiles.filter { it.name.contains("q6", ignoreCase = true) }
+                    QuantFilter.IQ -> quantFiles.filter { it.name.contains("iq", ignoreCase = true) }
+                }
+            return when (quantSortOrder) {
+                QuantSortOrder.SIZE_ASC -> filtered.sortedBy { it.size }
+                QuantSortOrder.SIZE_DESC -> filtered.sortedByDescending { it.size }
+                QuantSortOrder.NAME -> filtered.sortedBy { it.name.lowercase() }
+            }
+        }
+}
 
 @HiltViewModel
 @Suppress("TooManyFunctions")
@@ -77,7 +123,6 @@ class ModelManagerViewModel
             observeDownloads()
             observeModelMeta()
             observeRecommendations()
-            searchRepos("qwen")
         }
 
         fun refreshStorageAndModels() {
@@ -144,7 +189,23 @@ class ModelManagerViewModel
             viewModelScope.launch { dismissedRecommendationsStore.dismiss(id) }
         }
 
+        fun toggleBrowseHf() {
+            val next = !_uiState.value.isBrowseHfVisible
+            _uiState.update { it.copy(isBrowseHfVisible = next) }
+            if (next && _uiState.value.searchResults.isEmpty() && !_uiState.value.isSearchingRepos) {
+                searchRepos()
+            }
+        }
+
+        fun setBrowseHfVisible(visible: Boolean) {
+            _uiState.update { it.copy(isBrowseHfVisible = visible) }
+            if (visible && _uiState.value.searchResults.isEmpty() && !_uiState.value.isSearchingRepos) {
+                searchRepos()
+            }
+        }
+
         fun selectRecommendation(recommendation: ModelRecommendation) {
+            _uiState.update { it.copy(isBrowseHfVisible = true) }
             onSearchQueryChange(recommendation.repo)
             selectRepo(
                 ModelRepoSummary(
@@ -155,11 +216,48 @@ class ModelManagerViewModel
         }
 
         fun onSearchQueryChange(query: String) {
-            _uiState.update { it.copy(searchQuery = query) }
+            val matchingPreset =
+                REPO_FILTER_PRESETS.firstOrNull { preset ->
+                    !preset.equals("All", ignoreCase = true) &&
+                        preset.equals(query.trim(), ignoreCase = true)
+                }
+            _uiState.update {
+                it.copy(
+                    searchQuery = query,
+                    activeRepoFilter = matchingPreset ?: if (query.isBlank()) "All" else "",
+                )
+            }
+        }
+
+        fun clearSearch() {
+            onSearchQueryChange("")
+            searchRepos("")
+        }
+
+        fun setRepoSortOrder(order: RepoSortOrder) {
+            if (_uiState.value.repoSortOrder == order) return
+            _uiState.update { it.copy(repoSortOrder = order) }
+            searchRepos()
+        }
+
+        fun setRepoFilter(filter: String) {
+            _uiState.update { it.copy(activeRepoFilter = filter) }
+            val query = if (filter.equals("All", ignoreCase = true)) "" else filter
+            onSearchQueryChange(query)
+            searchRepos(query)
+        }
+
+        fun setQuantFilter(filter: QuantFilter) {
+            _uiState.update { it.copy(quantFilter = filter) }
+        }
+
+        fun setQuantSortOrder(order: QuantSortOrder) {
+            _uiState.update { it.copy(quantSortOrder = order) }
         }
 
         fun searchRepos(queryOverride: String? = null) {
             val query = (queryOverride ?: _uiState.value.searchQuery).trim()
+            val sortOrder = _uiState.value.repoSortOrder
             searchJob?.cancel()
             searchJob =
                 viewModelScope.launch {
@@ -170,7 +268,7 @@ class ModelManagerViewModel
                         )
                     }
                     repository
-                        .searchRepos(query)
+                        .searchRepos(query = query, sort = sortOrder)
                         .onSuccess { repos ->
                             _uiState.update {
                                 it.copy(
