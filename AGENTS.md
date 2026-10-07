@@ -90,3 +90,18 @@ git tag v<X.Y.Z>
 git push origin v<X.Y.Z>
 # Release appears at github.com/umair2k1/locus/releases after CI completes (~5 min)
 ```
+
+### 9. Autonomous Prompt Factory (Vibe Runner)
+```bash
+# Check current prompt sequence and progress status
+python tools/vibe.py status
+
+# Run autonomous unattended loop across remaining prompts
+python tools/vibe.py loop
+
+# Run a limited batch of prompts (e.g., next 3 prompts)
+python tools/vibe.py loop --count 3
+
+# Run verification suite standalone
+python tools/vibe.py verify
+```
