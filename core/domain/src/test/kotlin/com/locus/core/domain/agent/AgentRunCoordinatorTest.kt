@@ -1,9 +1,11 @@
 package com.locus.core.domain.agent
 
+import com.locus.core.domain.notes.Note
 import com.locus.core.domain.settings.AgentSettingsStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -15,15 +17,21 @@ import org.junit.Test
 
 class AgentRunCoordinatorTest {
     private lateinit var fakeSettingsStore: FakeAgentSettingsStore
+    private lateinit var fakeAuditJournal: FakeAuditJournal
+    private lateinit var fakeNoteRepository: FakeNoteRepository
     private lateinit var coordinator: AgentRunCoordinator
 
     @Before
     fun setUp() {
         fakeSettingsStore = FakeAgentSettingsStore(AgentSettingsStore.DEFAULT_BULK_CAP)
+        fakeAuditJournal = FakeAuditJournal()
+        fakeNoteRepository = FakeNoteRepository()
         coordinator =
             AgentRunCoordinator(
                 settingsStore = fakeSettingsStore,
                 confirmationCallback = { true },
+                auditJournal = fakeAuditJournal,
+                noteRepository = fakeNoteRepository,
             )
     }
 
@@ -299,6 +307,41 @@ class AgentRunCoordinatorTest {
             assertEquals(50, coordinator.distinctNotesAffected.size)
         }
 
+    @Test
+    fun everySuccessfulWrite_producesExactlyOneJournalRow_andRevertRestoresPreWriteBody() =
+        runTest {
+            val noteId = "note-audit-test"
+            val originalBody = "Original pre-write content"
+            val updatedBody = "Updated content by AI write tool"
+            fakeNoteRepository.notes[noteId] = originalBody
+
+            assertEquals(0, fakeAuditJournal.recordedEntries.size)
+
+            // Execute write
+            coordinator.execute(
+                tool = WriteToolName.UPDATE_NOTE,
+                argumentsJson = """{"noteId": "$noteId", "body": "$updatedBody"}""",
+            ) {
+                fakeNoteRepository.notes[noteId] = updatedBody
+                """{"noteId": "$noteId", "status": "updated"}"""
+            }
+
+            // Exactly one journal row produced
+            assertEquals(1, fakeAuditJournal.recordedEntries.size)
+            val entry = fakeAuditJournal.recordedEntries.first()
+            assertEquals("UPDATE_NOTE", entry.toolName)
+            assertEquals(listOf(noteId), entry.affectedNoteIds)
+            assertTrue(entry.diff.contains("-$originalBody"))
+            assertTrue(entry.diff.contains("+$updatedBody"))
+
+            // Revert restores the pre-write body exactly
+            fakeAuditJournal.revertHandler = {
+                fakeNoteRepository.notes[noteId] = originalBody
+            }
+            fakeAuditJournal.revert(entry.id)
+            assertEquals(originalBody, fakeNoteRepository.notes[noteId])
+        }
+
     private class FakeAgentSettingsStore(
         initialCap: Int = AgentSettingsStore.DEFAULT_BULK_CAP,
     ) : AgentSettingsStore {
@@ -308,5 +351,69 @@ class AgentRunCoordinatorTest {
         override suspend fun setBulkCap(value: Int) {
             _bulkCap.value = value
         }
+    }
+
+    private class FakeAuditJournal : AuditJournal {
+        val recordedEntries = mutableListOf<AuditEntry>()
+        var revertHandler: (suspend (String) -> Unit)? = null
+
+        override suspend fun record(entry: AuditEntry) {
+            recordedEntries.add(entry)
+        }
+
+        override fun observeEntries(): Flow<List<AuditEntry>> = MutableStateFlow(recordedEntries.toList())
+
+        override suspend fun revert(entryId: String) {
+            revertHandler?.invoke(entryId)
+        }
+    }
+
+    private class FakeNoteRepository : com.locus.core.domain.notes.NoteRepository {
+        val notes = mutableMapOf<String, String>()
+        val revisions = mutableMapOf<String, String>()
+
+        override suspend fun readBody(noteId: String): String = notes[noteId].orEmpty()
+
+        override suspend fun edit(
+            noteId: String,
+            newBody: String,
+        ) {
+            notes[noteId] = newBody
+        }
+
+        override fun observeNotesInFolder(folderPath: String): Flow<List<Note>> = flowOf(emptyList())
+
+        override fun observeAllNotes(): Flow<List<Note>> = flowOf(emptyList())
+
+        override suspend fun listFolders(): List<String> = emptyList()
+
+        override suspend fun createFolder(
+            parentPath: String,
+            name: String,
+        ) {
+            // no-op
+        }
+
+        override suspend fun createNote(
+            folderPath: String,
+            title: String,
+            type: com.locus.core.domain.notes.NoteType,
+        ): com.locus.core.domain.notes.Note = error("")
+
+        override suspend fun setPinned(
+            noteId: String,
+            pinned: Boolean,
+        ) {
+            // no-op
+        }
+
+        override suspend fun setColor(
+            noteId: String,
+            color: String?,
+        ) {
+            // no-op
+        }
+
+        override suspend fun rescan(): com.locus.core.domain.notes.RescanReport = error("")
     }
 }

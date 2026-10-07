@@ -5,6 +5,8 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.locus.core.data.audit.AuditDao
+import com.locus.core.data.audit.AuditEntryEntity
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.ChatMessageEntity
 import com.locus.core.data.chat.ChatSessionEntity
@@ -29,9 +31,9 @@ import com.locus.core.data.vector.EmbeddingConverters
             ChatMessageEntity::class,
             ModelMetaEntity::class,
             UsageEntity::class,
+            AuditEntryEntity::class,
         ],
-    version = 6,
-    exportSchema = true,
+    version = 7,
 )
 @TypeConverters(Converters::class, EmbeddingConverters::class)
 abstract class LocusDatabase : RoomDatabase() {
@@ -47,6 +49,8 @@ abstract class LocusDatabase : RoomDatabase() {
 
     abstract fun usageDao(): UsageDao
 
+    abstract fun auditDao(): AuditDao
+
     companion object {
         private const val VERSION_1 = 1
         private const val VERSION_2 = 2
@@ -54,6 +58,7 @@ abstract class LocusDatabase : RoomDatabase() {
         private const val VERSION_4 = 4
         private const val VERSION_5 = 5
         private const val VERSION_6 = 6
+        private const val VERSION_7 = 7
         val MIGRATION_1_2 =
             object : Migration(VERSION_1, VERSION_2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -171,6 +176,29 @@ abstract class LocusDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_token_usage_timestamp` ON `token_usage` (`timestamp`)",
+                    )
+                }
+            }
+
+        val MIGRATION_6_7 =
+            object : Migration(VERSION_6, VERSION_7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `audit_entries` (
+                            `id` TEXT NOT NULL,
+                            `toolName` TEXT NOT NULL,
+                            `argumentsJson` TEXT NOT NULL,
+                            `affectedNoteIds` TEXT NOT NULL,
+                            `timestamp` INTEGER NOT NULL,
+                            `modelId` TEXT NOT NULL,
+                            `diff` TEXT NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_audit_entries_timestamp` ON `audit_entries` (`timestamp`)",
                     )
                 }
             }

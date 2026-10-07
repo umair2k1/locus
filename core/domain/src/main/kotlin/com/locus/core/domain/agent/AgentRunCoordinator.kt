@@ -1,11 +1,13 @@
 package com.locus.core.domain.agent
 
+import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.settings.AgentSettingsStore
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +44,8 @@ class AgentRunCoordinator
         private val safetyClassifier: SafetyTierClassifier = SafetyTierClassifier(),
         private val settingsStore: AgentSettingsStore,
         private var confirmationCallback: ConfirmationCallback? = null,
+        private val auditJournal: AuditJournal? = null,
+        private val noteRepository: NoteRepository? = null,
     ) {
         private val _distinctNotesAffected = mutableSetOf<String>()
         private val syntheticNoteCounter = AtomicInteger(0)
@@ -59,7 +63,7 @@ class AgentRunCoordinator
             this.confirmationCallback = callback
         }
 
-        @Suppress("CyclomaticComplexMethod", "ThrowsCount")
+        @Suppress("CyclomaticComplexMethod", "ThrowsCount", "LongMethod")
         suspend fun execute(
             call: PendingToolCall,
             confirmationCallback: ConfirmationCallback? = this.confirmationCallback,
@@ -135,23 +139,51 @@ class AgentRunCoordinator
                 }
             }
 
-            // 4. Execute tool
+            // 4. Capture pre-write state for audit diff if needed
+            val preWriteBodies =
+                if (isWrite && auditJournal != null) {
+                    affectedNotesForCall.associateWith { id ->
+                        noteRepository?.let { runCatching { it.readBody(id) }.getOrNull() } ?: ""
+                    }
+                } else {
+                    emptyMap()
+                }
+
+            // 5. Execute tool
             val result = executeBlock()
 
-            // 5. On successful execution, record affected notes
-            if (isWrite) {
-                synchronized(this) {
-                    if (syntheticId != null) {
-                        val realId = extractNoteIdFromResult(result)
-                        if (realId != null) {
-                            _distinctNotesAffected.add(realId)
+            // 6. On successful execution, record affected notes
+            val finalNoteIds =
+                if (isWrite) {
+                    val ids =
+                        if (syntheticId != null) {
+                            val realId = extractNoteIdFromResult(result) ?: syntheticId
+                            listOf(realId)
                         } else {
-                            _distinctNotesAffected.add(syntheticId)
+                            affectedNotesForCall.toList()
                         }
-                    } else {
-                        _distinctNotesAffected.addAll(affectedNotesForCall)
+                    synchronized(this) {
+                        _distinctNotesAffected.addAll(ids)
                     }
+                    ids
+                } else {
+                    emptyList()
                 }
+
+            // 7. Record in audit journal on successful write (C-6, SEC-4)
+            if (isWrite && auditJournal != null) {
+                val diffText = buildDiff(finalNoteIds, preWriteBodies, call)
+                val entry =
+                    AuditEntry(
+                        id = UUID.randomUUID().toString(),
+                        toolName = call.tool.name,
+                        argumentsJson = call.argumentsJson,
+                        affectedNoteIds = finalNoteIds,
+                        timestamp = System.currentTimeMillis(),
+                        modelId = call.modelId,
+                        diff = diffText,
+                    )
+                auditJournal.record(entry)
             }
 
             return result
@@ -241,4 +273,25 @@ class AgentRunCoordinator
                 val prim = (element as? JsonObject)?.get("noteId") as? JsonPrimitive
                 prim?.content
             }.getOrNull()
+
+        private suspend fun buildDiff(
+            noteIds: List<String>,
+            preWriteBodies: Map<String, String>,
+            call: PendingToolCall,
+        ): String {
+            val diffs = mutableListOf<String>()
+            for (id in noteIds) {
+                val oldBody = preWriteBodies[id] ?: ""
+                val newBody = noteRepository?.let { runCatching { it.readBody(id) }.getOrNull() } ?: ""
+                if (oldBody.isNotEmpty() || newBody.isNotEmpty()) {
+                    diffs.add(DiffUtils.computeUnifiedDiff(id, oldBody, newBody))
+                }
+            }
+            return if (diffs.isNotEmpty()) {
+                diffs.joinToString("\n\n")
+            } else {
+                val target = noteIds.firstOrNull() ?: call.tool.name
+                "--- a/$target\n+++ b/$target\n@@ -0,0 +1,1 @@\n+${call.tool.name}: ${call.argumentsJson}"
+            }
+        }
     }

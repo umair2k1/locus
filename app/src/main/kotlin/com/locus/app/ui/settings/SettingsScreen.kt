@@ -64,12 +64,13 @@ private data class BackupUiState(
     val isBackingUp: Boolean,
 )
 
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 fun SettingsScreen(
     onNavigateToTrash: () -> Unit,
     onNavigateToModelManager: () -> Unit = {},
     onNavigateToUsageSummary: () -> Unit = {},
+    onNavigateToAuditJournal: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -170,7 +171,7 @@ fun SettingsScreen(
 
             LocalModelsCard(onManageModels = onNavigateToModelManager)
             UsageTrackingCard(onViewUsage = onNavigateToUsageSummary)
-
+            AuditJournalCard(onViewAuditJournal = onNavigateToAuditJournal)
             ImportExportCard(
                 includeApiKeys = includeApiKeys,
                 actions =
@@ -259,6 +260,33 @@ private fun UsageTrackingCard(
                 onClick = onViewUsage,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.settings_usage_button)) }
+        }
+    }
+}
+
+@Composable
+private fun AuditJournalCard(
+    onViewAuditJournal: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Audit Journal",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Review all AI modifications, view diffs, and revert changes",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onViewAuditJournal,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("View Audit Journal") }
         }
     }
 }

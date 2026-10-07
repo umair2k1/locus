@@ -25,6 +25,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.locus.app.R
+import com.locus.app.ui.audit.AuditJournalScreen
 import com.locus.app.ui.chat.ChatScreen
 import com.locus.app.ui.editor.EditorScreen
 import com.locus.app.ui.grid.GridScreen
@@ -97,6 +98,7 @@ fun LocusNavGraph(
     }
 }
 
+@Suppress("LongMethod")
 private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
     composable(LocusDestinations.GRID_ROUTE) {
         GridScreen(
@@ -122,6 +124,9 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             },
             onNavigateToUsageSummary = {
                 navController.navigate(LocusDestinations.USAGE_SUMMARY_ROUTE)
+            },
+            onNavigateToAuditJournal = {
+                navController.navigate(LocusDestinations.AUDIT_JOURNAL_ROUTE)
             },
         )
     }
@@ -171,6 +176,11 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
     }
     composable(LocusDestinations.USAGE_SUMMARY_ROUTE) {
         UsageSummaryScreen(
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+    composable(LocusDestinations.AUDIT_JOURNAL_ROUTE) {
+        AuditJournalScreen(
             onNavigateBack = { navController.popBackStack() },
         )
     }

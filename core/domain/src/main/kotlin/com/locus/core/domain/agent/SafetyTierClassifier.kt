@@ -50,6 +50,7 @@ data class PendingToolCall(
     val tool: WriteToolName,
     val origin: CallOrigin,
     val argumentsJson: String,
+    val modelId: String = "local",
 )
 
 sealed interface SafetyDecision {

@@ -281,4 +281,84 @@ class LocusDatabaseMigrationTest {
         helper.close()
         context.deleteDatabase(v6DbName)
     }
+
+    @Test
+    fun migration6To7_createsAuditEntriesTableAndIndex() {
+        val v7DbName = "test_migration_6_7.db"
+        context.deleteDatabase(v7DbName)
+        val config =
+            SupportSQLiteOpenHelper.Configuration
+                .builder(context)
+                .name(v7DbName)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(6) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL(
+                                """
+                                CREATE TABLE IF NOT EXISTS `token_usage` (
+                                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                    `providerId` TEXT NOT NULL,
+                                    `modelId` TEXT,
+                                    `inputTokens` INTEGER NOT NULL,
+                                    `outputTokens` INTEGER NOT NULL,
+                                    `timestamp` INTEGER NOT NULL
+                                )
+                                """.trimIndent(),
+                            )
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            // no-op
+                        }
+                    },
+                ).build()
+
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val helper = factory.create(config)
+        val v6Db = helper.writableDatabase
+
+        // Execute MIGRATION_6_7
+        LocusDatabase.MIGRATION_6_7.migrate(v6Db)
+
+        // Verify audit_entries exists and allows insertion
+        v6Db.execSQL(
+            """
+            INSERT INTO audit_entries (id, toolName, argumentsJson, affectedNoteIds, timestamp, modelId, diff)
+            VALUES ('entry-1', 'create_note', '{"title":"Test"}', 'note-1', 1700000000, 'qwen2.5', 'diff')
+            """.trimIndent(),
+        )
+
+        val cursor =
+            v6Db.query(
+                """
+                SELECT id, toolName, argumentsJson, affectedNoteIds, timestamp, modelId, diff
+                FROM audit_entries WHERE id = 'entry-1'
+                """.trimIndent(),
+            )
+        assertTrue(cursor.moveToFirst())
+        assertEquals("entry-1", cursor.getString(0))
+        assertEquals("create_note", cursor.getString(1))
+        assertEquals("{\"title\":\"Test\"}", cursor.getString(2))
+        assertEquals("note-1", cursor.getString(3))
+        assertEquals(1700000000L, cursor.getLong(4))
+        assertEquals("qwen2.5", cursor.getString(5))
+        assertEquals("diff", cursor.getString(6))
+        cursor.close()
+
+        // Verify index exists
+        val indexCursor = v6Db.query("PRAGMA index_list('audit_entries')")
+        val indexNames = mutableListOf<String>()
+        while (indexCursor.moveToNext()) {
+            indexNames.add(indexCursor.getString(1))
+        }
+        indexCursor.close()
+        assertTrue(indexNames.contains("index_audit_entries_timestamp"))
+
+        helper.close()
+        context.deleteDatabase(v7DbName)
+    }
 }

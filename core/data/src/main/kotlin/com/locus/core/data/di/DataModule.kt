@@ -2,6 +2,8 @@ package com.locus.core.data.di
 
 import android.content.Context
 import androidx.room.Room
+import com.locus.core.data.audit.AuditDao
+import com.locus.core.data.audit.RoomAuditJournal
 import com.locus.core.data.backup.BackupPreferencesStore
 import com.locus.core.data.backup.SafImportExportRepository
 import com.locus.core.data.chat.ChatDao
@@ -23,6 +25,7 @@ import com.locus.core.data.usage.RoomUsageTracker
 import com.locus.core.data.usage.UsageDao
 import com.locus.core.data.vector.ChunkDao
 import com.locus.core.data.vector.VectorStore
+import com.locus.core.domain.agent.AuditJournal
 import com.locus.core.domain.backup.BackupSettingsRepository
 import com.locus.core.domain.backup.ImportExportRepository
 import com.locus.core.domain.chat.ChatRepository
@@ -108,6 +111,9 @@ abstract class DataModule {
     @Binds @Singleton
     abstract fun bindPriceTableStore(impl: PriceTableStore): DomainPriceTableStore
 
+    @Binds @Singleton
+    abstract fun bindAuditJournal(impl: RoomAuditJournal): AuditJournal
+
     companion object {
         @Provides
         @Singleton
@@ -129,6 +135,7 @@ abstract class DataModule {
                     LocusDatabase.MIGRATION_3_4,
                     LocusDatabase.MIGRATION_4_5,
                     LocusDatabase.MIGRATION_5_6,
+                    LocusDatabase.MIGRATION_6_7,
                 ).build()
 
         @Provides fun provideNoteDao(database: LocusDatabase): NoteDao = database.noteDao()
@@ -144,5 +151,7 @@ abstract class DataModule {
         fun provideModelMetaDao(database: LocusDatabase): ModelMetaDao = database.modelMetaDao()
 
         @Provides fun provideUsageDao(database: LocusDatabase): UsageDao = database.usageDao()
+
+        @Provides fun provideAuditDao(database: LocusDatabase): AuditDao = database.auditDao()
     }
 }
