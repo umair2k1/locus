@@ -431,4 +431,82 @@ class LocusDatabaseMigrationTest {
         helper.close()
         context.deleteDatabase(v8DbName)
     }
+
+    @Test
+    fun migration8To9_createsDigestsTableAndIndices() {
+        val v9DbName = "test_migration_8_9.db"
+        context.deleteDatabase(v9DbName)
+        val config =
+            SupportSQLiteOpenHelper.Configuration
+                .builder(context)
+                .name(v9DbName)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(8) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL(
+                                """
+                                CREATE TABLE IF NOT EXISTS `prompt_templates` (
+                                    `id` TEXT NOT NULL,
+                                    `title` TEXT NOT NULL,
+                                    `templateBody` TEXT NOT NULL,
+                                    `createdAt` INTEGER NOT NULL,
+                                    PRIMARY KEY(`id`)
+                                )
+                                """.trimIndent(),
+                            )
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            // no-op
+                        }
+                    },
+                ).build()
+
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val helper = factory.create(config)
+        val v8Db = helper.writableDatabase
+
+        // Execute MIGRATION_8_9
+        LocusDatabase.MIGRATION_8_9.migrate(v8Db)
+
+        // Verify digests exists and allows insertion
+        v8Db.execSQL(
+            """
+            INSERT INTO digests (id, period, itemsJson, overallSummary, computedAt)
+            VALUES ('digest-1', 'DAILY', '[]', 'Summary', 1700000000)
+            """.trimIndent(),
+        )
+
+        val cursor =
+            v8Db.query(
+                """
+                SELECT id, period, itemsJson, overallSummary, computedAt
+                FROM digests WHERE id = 'digest-1'
+                """.trimIndent(),
+            )
+        assertTrue(cursor.moveToFirst())
+        assertEquals("digest-1", cursor.getString(0))
+        assertEquals("DAILY", cursor.getString(1))
+        assertEquals("[]", cursor.getString(2))
+        assertEquals("Summary", cursor.getString(3))
+        assertEquals(1700000000L, cursor.getLong(4))
+        cursor.close()
+
+        // Verify indices exist
+        val indexCursor = v8Db.query("PRAGMA index_list('digests')")
+        val indexNames = mutableListOf<String>()
+        while (indexCursor.moveToNext()) {
+            indexNames.add(indexCursor.getString(1))
+        }
+        indexCursor.close()
+        assertTrue(indexNames.contains("index_digests_period"))
+        assertTrue(indexNames.contains("index_digests_computedAt"))
+
+        helper.close()
+        context.deleteDatabase(v9DbName)
+    }
 }

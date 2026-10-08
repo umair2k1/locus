@@ -10,6 +10,8 @@ import com.locus.core.data.audit.AuditEntryEntity
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.ChatMessageEntity
 import com.locus.core.data.chat.ChatSessionEntity
+import com.locus.core.data.dashboard.DigestDao
+import com.locus.core.data.dashboard.DigestEntity
 import com.locus.core.data.models.ModelMetaDao
 import com.locus.core.data.models.ModelMetaEntity
 import com.locus.core.data.reminders.ReminderDao
@@ -35,8 +37,9 @@ import com.locus.core.data.vector.EmbeddingConverters
             UsageEntity::class,
             AuditEntryEntity::class,
             PromptTemplateEntity::class,
+            DigestEntity::class,
         ],
-    version = 8,
+    version = 9,
 )
 @TypeConverters(Converters::class, EmbeddingConverters::class)
 abstract class LocusDatabase : RoomDatabase() {
@@ -56,6 +59,8 @@ abstract class LocusDatabase : RoomDatabase() {
 
     abstract fun promptTemplateDao(): PromptTemplateDao
 
+    abstract fun digestDao(): DigestDao
+
     companion object {
         private const val VERSION_1 = 1
         private const val VERSION_2 = 2
@@ -65,6 +70,7 @@ abstract class LocusDatabase : RoomDatabase() {
         private const val VERSION_6 = 6
         private const val VERSION_7 = 7
         private const val VERSION_8 = 8
+        private const val VERSION_9 = 9
         val MIGRATION_1_2 =
             object : Migration(VERSION_1, VERSION_2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -222,6 +228,30 @@ abstract class LocusDatabase : RoomDatabase() {
                             PRIMARY KEY(`id`)
                         )
                         """.trimIndent(),
+                    )
+                }
+            }
+
+        val MIGRATION_8_9 =
+            object : Migration(VERSION_8, VERSION_9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `digests` (
+                            `id` TEXT NOT NULL,
+                            `period` TEXT NOT NULL,
+                            `itemsJson` TEXT NOT NULL,
+                            `overallSummary` TEXT NOT NULL,
+                            `computedAt` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_digests_period` ON `digests` (`period`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_digests_computedAt` ON `digests` (`computedAt`)",
                     )
                 }
             }

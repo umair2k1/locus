@@ -8,6 +8,7 @@ import com.locus.core.data.backup.BackupPreferencesStore
 import com.locus.core.data.backup.SafImportExportRepository
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.RoomChatRepository
+import com.locus.core.data.dashboard.DigestDao
 import com.locus.core.data.db.LocusDatabase
 import com.locus.core.data.db.NoteDao
 import com.locus.core.data.files.AndroidSafNoteFileSource
@@ -143,6 +144,7 @@ abstract class DataModule {
                     LocusDatabase.MIGRATION_5_6,
                     LocusDatabase.MIGRATION_6_7,
                     LocusDatabase.MIGRATION_7_8,
+                    LocusDatabase.MIGRATION_8_9,
                 ).build()
 
         @Provides fun provideNoteDao(database: LocusDatabase): NoteDao = database.noteDao()
@@ -163,5 +165,7 @@ abstract class DataModule {
 
         @Provides
         fun providePromptTemplateDao(database: LocusDatabase): PromptTemplateDao = database.promptTemplateDao()
+
+        @Provides fun provideDigestDao(database: LocusDatabase): DigestDao = database.digestDao()
     }
 }

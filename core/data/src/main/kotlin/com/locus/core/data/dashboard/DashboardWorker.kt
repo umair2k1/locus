@@ -7,6 +7,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.NetworkType
 import androidx.work.WorkerParameters
 import com.locus.core.data.settings.DashboardSettingsStore
+import com.locus.core.domain.dashboard.ComputeDigestUseCase
+import com.locus.core.domain.dashboard.DigestPeriod
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -28,12 +30,18 @@ class DashboardWorker
         @Assisted appContext: Context,
         @Assisted params: WorkerParameters,
         private val settingsStore: DashboardSettingsStore,
+        private val digestDao: DigestDao? = null,
+        private val computeDigestUseCase: ComputeDigestUseCase? = null,
     ) : CoroutineWorker(appContext, params) {
         var subJobRunner: DashboardSubJobRunner? = null
 
         override suspend fun doWork(): Result {
             val settings = settingsStore.settingsFlow.first()
             if (settings.isDigestEnabled) {
+                val digest = computeDigestUseCase?.execute(DigestPeriod.DAILY)
+                if (digest != null && digestDao != null) {
+                    digestDao.insert(DigestEntity.fromDomain(digest))
+                }
                 subJobRunner?.runDigest()
             }
             if (settings.isClustersEnabled) {

@@ -18,6 +18,7 @@ import com.locus.core.ai.providers.OpenAiCompatibleAdapter
 import com.locus.core.domain.chat.ActiveModelRepository
 import com.locus.core.domain.chat.ChatModelClient
 import com.locus.core.domain.chat.RagAnswerUseCase
+import com.locus.core.domain.dashboard.ComputeDigestUseCase
 import com.locus.core.domain.models.DeviceCapabilitiesGateway
 import com.locus.core.domain.models.ModelManagerRepository
 import com.locus.core.domain.models.ModelRegistry
@@ -27,6 +28,7 @@ import com.locus.core.domain.notes.SuggestTagsUseCase
 import com.locus.core.domain.providers.ProviderAdapter
 import com.locus.core.domain.search.EmbeddingGateway
 import com.locus.core.domain.search.HybridSearchUseCase
+import com.locus.core.domain.time.Clock
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -176,6 +178,19 @@ abstract class AiModule {
         fun provideSuggestTagsUseCase(providerAdapter: ProviderAdapter): SuggestTagsUseCase =
             SuggestTagsUseCase(
                 chatModelClient = providerAdapter,
+            )
+
+        @Provides
+        @Singleton
+        fun provideComputeDigestUseCase(
+            noteRepository: NoteRepository,
+            providerAdapter: ProviderAdapter,
+            clock: Clock,
+        ): ComputeDigestUseCase =
+            ComputeDigestUseCase(
+                noteRepository = noteRepository,
+                chatModelClient = providerAdapter,
+                clock = clock,
             )
     }
 }
