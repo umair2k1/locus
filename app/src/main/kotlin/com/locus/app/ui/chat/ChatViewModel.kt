@@ -271,7 +271,11 @@ class ChatViewModel
                     onSuccess = { downloaded ->
                         modelRegistry?.refresh()
                         val localRef =
-                            ModelRef(id = downloaded.filename, tier = com.locus.core.domain.routing.ModelTier.LOCAL, providerId = null)
+                            ModelRef(
+                                id = downloaded.filename,
+                                tier = com.locus.core.domain.routing.ModelTier.LOCAL,
+                                providerId = null,
+                            )
                         val entry =
                             RegistryEntry(
                                 ref = localRef,

@@ -212,94 +212,121 @@ private fun transformCurrentLine(
 
 /**
  * Intercepts [onValueChange] in the note editor to provide Google Keep-style list continuation:
- * - When Enter is pressed on a line containing a list marker (- [ ] / - [x], - / *, 1.), continues the marker on the next line.
+ * - When Enter is pressed on a line containing a list marker (- [ ] / - [x], - / *, 1.),
+ *   continues the marker on the next line.
  * - For checkboxes, always continues as an unchecked box (- [ ] ).
  * - For ordered lists, increments the number (e.g. 1. -> 2.).
- * - If Enter is pressed on an empty list item (only marker present), deletes the marker and leaves an empty line (exits the list).
+ * - If Enter is pressed on an empty list item (only marker present), deletes the marker
+ *   and leaves an empty line (exits the list).
  */
 fun handleEditorValueChange(
     oldValue: TextFieldValue,
     newValue: TextFieldValue,
 ): TextFieldValue {
-    // Only intercept when exactly one character was typed/inserted and that character is newline
-    if (newValue.text.length != oldValue.text.length + 1) return newValue
+    val continuation = resolveListContinuation(oldValue, newValue)
+    return continuation ?: newValue
+}
 
+private fun isSingleNewlineInsertion(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue,
+): Boolean {
+    if (newValue.text.length != oldValue.text.length + 1) return false
     val insertedOffset = oldValue.selection.start
-    if (insertedOffset !in 0 until newValue.text.length) return newValue
-    if (newValue.text[insertedOffset] != '\n') return newValue
+    return insertedOffset in 0 until newValue.text.length && newValue.text[insertedOffset] == '\n'
+}
+
+private fun resolveListContinuation(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue,
+): TextFieldValue? {
+    if (!isSingleNewlineInsertion(oldValue, newValue)) return null
+    val insertedOffset = oldValue.selection.start
 
     // Find the line preceding the newly inserted newline
     val prevLineEnd = insertedOffset
-    val prevLineStart = if (prevLineEnd == 0) 0 else (newValue.text.lastIndexOf('\n', prevLineEnd - 1) + 1).coerceAtLeast(0)
+    val prevLineStart =
+        if (prevLineEnd == 0) {
+            0
+        } else {
+            (newValue.text.lastIndexOf('\n', prevLineEnd - 1) + 1).coerceAtLeast(0)
+        }
     val prevLine = newValue.text.substring(prevLineStart, prevLineEnd)
 
-    // Check for checkbox: e.g. "  - [ ] ", "  - [x] "
-    val checkboxMatch = CHECKBOX_PREFIX_PATTERN.find(prevLine)
-    if (checkboxMatch != null) {
-        val fullPrefix = checkboxMatch.value
-        val content = prevLine.substring(fullPrefix.length)
-        return if (content.isBlank()) {
-            // Empty checkbox item: remove checkbox prefix, leaving a blank line (exit list)
-            val textBefore = newValue.text.substring(0, prevLineStart)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + textAfter
-            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
-        } else {
-            // Non-empty checkbox: continue as unchecked box "- [ ] " with same indent
-            val indent = fullPrefix.takeWhile { it.isWhitespace() }
-            val nextPrefix = "$indent- [ ] "
-            val textBefore = newValue.text.substring(0, insertedOffset + 1)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + nextPrefix + textAfter
-            val newCursor = insertedOffset + 1 + nextPrefix.length
-            TextFieldValue(text = newText, selection = TextRange(newCursor))
-        }
-    }
+    return handleCheckboxContinuation(newValue, prevLine, prevLineStart, insertedOffset)
+        ?: handleOrderedContinuation(newValue, prevLine, prevLineStart, insertedOffset)
+        ?: handleBulletContinuation(newValue, prevLine, prevLineStart, insertedOffset)
+}
 
-    // Check for ordered list: e.g. "  1. "
-    val orderedMatch = ORDERED_PREFIX_PATTERN.find(prevLine)
-    if (orderedMatch != null) {
-        val fullPrefix = orderedMatch.value
-        val num = orderedMatch.groupValues[2].toLongOrNull() ?: 1L
-        val content = prevLine.substring(fullPrefix.length)
-        return if (content.isBlank()) {
-            // Empty ordered item: exit list
-            val textBefore = newValue.text.substring(0, prevLineStart)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + textAfter
-            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
-        } else {
-            // Increment number
-            val indent = fullPrefix.takeWhile { it.isWhitespace() }
-            val nextPrefix = "$indent${num + 1}. "
-            val textBefore = newValue.text.substring(0, insertedOffset + 1)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + nextPrefix + textAfter
-            val newCursor = insertedOffset + 1 + nextPrefix.length
-            TextFieldValue(text = newText, selection = TextRange(newCursor))
-        }
+private fun handleCheckboxContinuation(
+    newValue: TextFieldValue,
+    prevLine: String,
+    prevLineStart: Int,
+    insertedOffset: Int,
+): TextFieldValue? {
+    val checkboxMatch = CHECKBOX_PREFIX_PATTERN.find(prevLine) ?: return null
+    val fullPrefix = checkboxMatch.value
+    val content = prevLine.substring(fullPrefix.length)
+    return if (content.isBlank()) {
+        exitList(newValue, prevLineStart, insertedOffset)
+    } else {
+        val indent = fullPrefix.takeWhile { it.isWhitespace() }
+        continueList(newValue, insertedOffset, "$indent- [ ] ")
     }
+}
 
-    // Check for unordered bullet: e.g. "  - ", "  * ", "  + "
-    val bulletMatch = BULLET_PREFIX_PATTERN.find(prevLine)
-    if (bulletMatch != null) {
-        val fullPrefix = bulletMatch.value
-        val content = prevLine.substring(fullPrefix.length)
-        return if (content.isBlank()) {
-            // Empty bullet item: exit list
-            val textBefore = newValue.text.substring(0, prevLineStart)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + textAfter
-            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
-        } else {
-            // Continue bullet with same symbol and indent
-            val textBefore = newValue.text.substring(0, insertedOffset + 1)
-            val textAfter = newValue.text.substring(insertedOffset + 1)
-            val newText = textBefore + fullPrefix + textAfter
-            val newCursor = insertedOffset + 1 + fullPrefix.length
-            TextFieldValue(text = newText, selection = TextRange(newCursor))
-        }
+private fun handleOrderedContinuation(
+    newValue: TextFieldValue,
+    prevLine: String,
+    prevLineStart: Int,
+    insertedOffset: Int,
+): TextFieldValue? {
+    val orderedMatch = ORDERED_PREFIX_PATTERN.find(prevLine) ?: return null
+    val fullPrefix = orderedMatch.value
+    val num = orderedMatch.groupValues[2].toLongOrNull() ?: 1L
+    val content = prevLine.substring(fullPrefix.length)
+    return if (content.isBlank()) {
+        exitList(newValue, prevLineStart, insertedOffset)
+    } else {
+        val indent = fullPrefix.takeWhile { it.isWhitespace() }
+        continueList(newValue, insertedOffset, "$indent${num + 1}. ")
     }
+}
 
-    return newValue
+private fun handleBulletContinuation(
+    newValue: TextFieldValue,
+    prevLine: String,
+    prevLineStart: Int,
+    insertedOffset: Int,
+): TextFieldValue? {
+    val bulletMatch = BULLET_PREFIX_PATTERN.find(prevLine) ?: return null
+    val fullPrefix = bulletMatch.value
+    val content = prevLine.substring(fullPrefix.length)
+    return if (content.isBlank()) {
+        exitList(newValue, prevLineStart, insertedOffset)
+    } else {
+        continueList(newValue, insertedOffset, fullPrefix)
+    }
+}
+
+private fun exitList(
+    newValue: TextFieldValue,
+    prevLineStart: Int,
+    insertedOffset: Int,
+): TextFieldValue {
+    val textBefore = newValue.text.substring(0, prevLineStart)
+    val textAfter = newValue.text.substring(insertedOffset + 1)
+    return TextFieldValue(text = textBefore + textAfter, selection = TextRange(prevLineStart))
+}
+
+private fun continueList(
+    newValue: TextFieldValue,
+    insertedOffset: Int,
+    nextPrefix: String,
+): TextFieldValue {
+    val textBefore = newValue.text.substring(0, insertedOffset + 1)
+    val textAfter = newValue.text.substring(insertedOffset + 1)
+    val newText = textBefore + nextPrefix + textAfter
+    val newCursor = insertedOffset + 1 + nextPrefix.length
+    return TextFieldValue(text = newText, selection = TextRange(newCursor))
 }

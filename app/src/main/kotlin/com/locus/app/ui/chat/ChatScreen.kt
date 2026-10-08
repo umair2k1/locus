@@ -98,12 +98,13 @@ import com.locus.core.domain.chat.CitedSource
 import com.locus.core.domain.routing.ModelRef
 import kotlinx.coroutines.launch
 
+private const val MIN_SCROLLBAR_THUMB_HEIGHT_PX = 40f
 private const val CORNER_RADIUS = 16
 private const val SMALL_CORNER_RADIUS = 4
 private const val BANNER_CORNER_RADIUS = 8
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongMethod", "LongParameterList")
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 fun ChatScreen(
     onNavigateBack: () -> Unit,
@@ -763,7 +764,10 @@ private fun Modifier.verticalScrollbar(
         val totalEstimatedHeight = estimatedItemHeight * totalItemsCount
         val currentScrollOffset = (firstVisibleIndex * estimatedItemHeight) + firstVisibleOffset
 
-        val thumbHeight = (viewportHeight * (viewportHeight / totalEstimatedHeight)).coerceIn(40f, viewportHeight / 2)
+        val minThumbHeight = MIN_SCROLLBAR_THUMB_HEIGHT_PX
+        val thumbHeight =
+            (viewportHeight * (viewportHeight / totalEstimatedHeight))
+                .coerceIn(minThumbHeight, viewportHeight / 2)
         val maxScrollOffset = (totalEstimatedHeight - viewportHeight).coerceAtLeast(1f)
         val thumbY = (currentScrollOffset / maxScrollOffset) * (viewportHeight - thumbHeight)
 

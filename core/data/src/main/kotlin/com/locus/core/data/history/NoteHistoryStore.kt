@@ -270,25 +270,29 @@ open class NoteHistoryStore
 
         internal fun extractTitle(raw: String): String {
             val frontmatterMatch = FRONTMATTER_REGEX.find(raw)
-            if (frontmatterMatch != null) {
-                val yaml = frontmatterMatch.value
-                val titleMatch = TITLE_FIELD_REGEX.find(yaml)
-                if (titleMatch != null) {
-                    val parsed =
-                        titleMatch.groupValues[1]
-                            .trim()
-                            .removeSurrounding("\"")
-                            .removeSurrounding("'")
-                    if (parsed.isNotBlank()) return parsed
+            val frontmatterTitle =
+                frontmatterMatch?.let { match ->
+                    TITLE_FIELD_REGEX
+                        .find(match.value)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.trim()
+                        ?.removeSurrounding("\"")
+                        ?.removeSurrounding("'")
+                        ?.takeIf { it.isNotBlank() }
                 }
+            if (frontmatterTitle != null) {
+                return frontmatterTitle
             }
+
             // Fallback: search for first markdown heading (# Heading)
-            val headingMatch = FIRST_HEADING_REGEX.find(raw)
-            if (headingMatch != null) {
-                val heading = headingMatch.groupValues[1].trim()
-                if (heading.isNotBlank()) return heading
-            }
-            return ""
+            return FIRST_HEADING_REGEX
+                .find(raw)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: ""
         }
 
         private fun buildSnapshotContent(

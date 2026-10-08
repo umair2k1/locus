@@ -103,7 +103,8 @@ class HistoryViewModelTest {
     fun restoreRevision_callsRepoEditAndForceFlush_andSetsTitleWhenPresent() =
         runTest {
             val noteId = "note-to-restore"
-            val revisionToRestore = HistoryRevision(timestamp = 1500L, body = "Restored content", title = "Restored Title")
+            val revisionToRestore =
+                HistoryRevision(timestamp = 1500L, body = "Restored content", title = "Restored Title")
             var restoredCallbackInvoked = false
 
             viewModel.restoreRevision(noteId, revisionToRestore) { restoredCallbackInvoked = true }
