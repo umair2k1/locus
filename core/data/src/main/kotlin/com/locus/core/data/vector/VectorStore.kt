@@ -16,6 +16,7 @@ import javax.inject.Singleton
 import kotlin.math.sqrt
 
 @Singleton
+@Suppress("TooManyFunctions")
 class VectorStore
     @Inject
     constructor(
@@ -72,6 +73,40 @@ class VectorStore
         }
 
         override suspend fun countChunks(): Int = chunkDao.countChunks()
+
+        override suspend fun meanEmbeddingForNote(noteId: String): FloatArray? {
+            val chunks = chunkDao.getChunksByNoteId(noteId)
+            if (chunks.isEmpty()) return null
+            return computeMean(chunks.map { it.embedding })
+        }
+
+        override suspend fun allNoteMeanEmbeddings(): Map<String, FloatArray> {
+            val rows = chunkDao.getAllEmbeddingRows()
+            if (rows.isEmpty()) return emptyMap()
+            val noteToEmbeddings = mutableMapOf<String, MutableList<FloatArray>>()
+            for (row in rows) {
+                noteToEmbeddings.getOrPut(row.noteId) { mutableListOf() }.add(row.embedding)
+            }
+            return noteToEmbeddings.mapValues { (_, embeddings) ->
+                computeMean(embeddings)
+            }
+        }
+
+        private fun computeMean(embeddings: List<FloatArray>): FloatArray {
+            val dim = embeddings.first().size
+            val mean = FloatArray(dim)
+            for (emb in embeddings) {
+                val len = minOf(dim, emb.size)
+                for (i in 0 until len) {
+                    mean[i] += emb[i]
+                }
+            }
+            val count = embeddings.size.toFloat()
+            for (i in 0 until dim) {
+                mean[i] /= count
+            }
+            return mean
+        }
 
         override suspend fun search(
             queryVector: FloatArray,

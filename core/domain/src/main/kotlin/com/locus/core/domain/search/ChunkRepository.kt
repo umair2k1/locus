@@ -72,4 +72,8 @@ interface ChunkRepository {
     suspend fun deleteAll()
 
     suspend fun countChunks(): Int = 0
+
+    suspend fun meanEmbeddingForNote(noteId: String): FloatArray? = null
+
+    suspend fun allNoteMeanEmbeddings(): Map<String, FloatArray> = emptyMap()
 }

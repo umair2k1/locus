@@ -52,6 +52,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.locus.app.R
 import com.locus.core.domain.notes.InlineAiAction
+import com.locus.core.domain.search.RelatedNote
 
 @Composable
 fun EditorScreen(
@@ -81,6 +82,7 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val inlineAiState by viewModel.inlineAiState.collectAsState()
     val tagSuggestionState by viewModel.tagSuggestionState.collectAsState()
+    val relatedNotes by viewModel.relatedNotes.collectAsState()
     var showHistorySheet by remember { mutableStateOf(false) }
 
     val actions =
@@ -103,6 +105,7 @@ fun EditorScreen(
     EditorContent(
         uiState = uiState,
         actions = actions,
+        relatedNotes = relatedNotes,
         modifier = modifier,
     )
 
@@ -153,6 +156,7 @@ private data class EditorActions(
 private fun EditorContent(
     uiState: EditorUiState,
     actions: EditorActions,
+    relatedNotes: List<RelatedNote>,
     modifier: Modifier = Modifier,
 ) {
     var textFieldValue by remember { mutableStateOf(TextFieldValue(uiState.body)) }
@@ -208,6 +212,13 @@ private fun EditorContent(
                         modifier = Modifier.fillMaxSize(),
                         onNoteClick = actions.onNavigateToNote,
                     )
+                    if (relatedNotes.isNotEmpty()) {
+                        RelatedNotesSection(
+                            relatedNotes = relatedNotes,
+                            onNoteClick = { actions.onNavigateToNote?.invoke(it) },
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
                 }
             } else {
                 SourceEditorColumn(
@@ -222,6 +233,7 @@ private fun EditorContent(
                         actions.onBodyChange(newValue.text)
                     },
                     actions = actions,
+                    relatedNotes = relatedNotes,
                 )
             }
         }
@@ -336,6 +348,7 @@ private fun SourceEditorColumn(
     textFieldValue: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     actions: EditorActions,
+    relatedNotes: List<RelatedNote>,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -375,6 +388,13 @@ private fun SourceEditorColumn(
             onValueChange = onValueChange,
             modifier = Modifier.weight(1f),
         )
+        if (relatedNotes.isNotEmpty()) {
+            RelatedNotesSection(
+                relatedNotes = relatedNotes,
+                onNoteClick = { actions.onNavigateToNote?.invoke(it) },
+                modifier = Modifier.padding(16.dp),
+            )
+        }
     }
 }
 

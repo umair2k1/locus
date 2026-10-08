@@ -10,6 +10,8 @@ import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
 import com.locus.core.domain.notes.SuggestTagsUseCase
+import com.locus.core.domain.search.RelatedNote
+import com.locus.core.domain.search.RelatedNotesUseCase
 import com.locus.core.domain.time.DispatcherProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +59,7 @@ class EditorViewModel
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
         private val inlineAiUseCase: InlineAiUseCase? = null,
         private val suggestTagsUseCase: SuggestTagsUseCase? = null,
+        private val relatedNotesUseCase: RelatedNotesUseCase? = null,
     ) : ViewModel() {
         private val flushScope = CoroutineScope(SupervisorJob() + dispatchers.io)
         private var currentNoteId: String =
@@ -72,6 +75,8 @@ class EditorViewModel
         val inlineAiState: StateFlow<InlineAiReviewState?> = _inlineAiState.asStateFlow()
         private val _tagSuggestionState = MutableStateFlow<TagSuggestionState?>(null)
         val tagSuggestionState: StateFlow<TagSuggestionState?> = _tagSuggestionState.asStateFlow()
+        private val _relatedNotes = MutableStateFlow<List<RelatedNote>>(emptyList())
+        val relatedNotes: StateFlow<List<RelatedNote>> = _relatedNotes.asStateFlow()
 
         init {
             if (currentNoteId.isNotEmpty()) {
@@ -84,6 +89,7 @@ class EditorViewModel
             if (id.isEmpty() || id == "new") {
                 isCustomTitle = false
                 _uiState.update { it.copy(body = "", title = "") }
+                _relatedNotes.value = emptyList()
                 return
             }
             isCustomTitle = true
@@ -92,6 +98,9 @@ class EditorViewModel
                 _uiState.update { it.copy(body = initialBody) }
             }
             startObservingNote(id)
+            viewModelScope.launch(dispatchers.io) {
+                _relatedNotes.value = relatedNotesUseCase?.execute(id) ?: emptyList()
+            }
         }
 
         private fun startObservingNote(id: String) {
