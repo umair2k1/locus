@@ -35,6 +35,7 @@ import com.locus.core.domain.providers.ProviderRole
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.RouteDecision
 import com.locus.core.domain.routing.Sec5TransitionGate
+import com.locus.core.domain.settings.NetworkSettingsStore
 import com.locus.core.domain.templates.PromptTemplate
 import com.locus.core.domain.templates.PromptTemplateRepository
 import com.locus.core.domain.templates.RenderTemplateUseCase
@@ -75,6 +76,7 @@ data class ChatUiState(
         ),
     val availableModels: List<RegistryEntry> = emptyList(),
     val showThermalWarning: Boolean = false,
+    val isCloudDisabled: Boolean = false,
 )
 
 sealed interface ChatEffect {
@@ -98,6 +100,7 @@ class ChatViewModel
         private val auditJournal: com.locus.core.domain.agent.AuditJournal? = null,
         private val promptTemplateRepository: PromptTemplateRepository? = null,
         private val renderTemplateUseCase: RenderTemplateUseCase? = null,
+        private val networkSettingsStore: NetworkSettingsStore? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ChatUiState())
         val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -139,6 +142,7 @@ class ChatViewModel
             observeModelRegistry()
             observeThermalStatus()
             setupAgentCoordinator()
+            observeNetworkSettings()
         }
 
         private fun observeSessions() {
@@ -202,7 +206,37 @@ class ChatViewModel
             thermalMonitor?.dismissWarning()
         }
 
+        private fun observeNetworkSettings() {
+            val store = networkSettingsStore ?: return
+            viewModelScope.launch(dispatchers.io) {
+                store.isCloudDisabled.collectLatest { isCloudDisabled ->
+                    _uiState.update { it.copy(isCloudDisabled = isCloudDisabled) }
+                    val isCloudActive =
+                        _uiState.value.activeModel.tier == com.locus.core.domain.chat.ModelTier.CLOUD
+                    if (isCloudDisabled && isCloudActive) {
+                        val localFallback =
+                            _uiState.value.availableModels.firstOrNull {
+                                it.isOffline || it.ref.tier == com.locus.core.domain.routing.ModelTier.LOCAL
+                            }
+                        if (localFallback != null) {
+                            selectModel(localFallback)
+                        } else {
+                            val defaultLocal =
+                                com.locus.core.domain.chat.ActiveModelInfo(
+                                    name = "Local Model",
+                                    tier = com.locus.core.domain.chat.ModelTier.LOCAL,
+                                )
+                            _uiState.update { it.copy(activeModel = defaultLocal) }
+                        }
+                    }
+                }
+            }
+        }
+
         fun selectModel(entry: RegistryEntry) {
+            if (_uiState.value.isCloudDisabled && entry.ref.tier == com.locus.core.domain.routing.ModelTier.CLOUD) {
+                return
+            }
             val sessionId = _uiState.value.activeSessionId ?: "default"
             if (!sessionConfirmedModels.containsKey(sessionId)) {
                 val current = _uiState.value.activeModel
@@ -261,7 +295,11 @@ class ChatViewModel
 
         fun sendMessage(content: String) {
             val trimmed = content.trim()
-            if (trimmed.isBlank() || _uiState.value.streamingText != null) return
+            val isGenerating = _uiState.value.streamingText != null
+            val isCloudBlocked =
+                _uiState.value.isCloudDisabled &&
+                    _uiState.value.activeModel.tier == com.locus.core.domain.chat.ModelTier.CLOUD
+            if (trimmed.isBlank() || isGenerating || isCloudBlocked) return
 
             val sessionId = _uiState.value.activeSessionId ?: "default"
             val currentModel =

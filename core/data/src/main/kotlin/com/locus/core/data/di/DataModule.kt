@@ -130,6 +130,12 @@ abstract class DataModule {
 
     @Binds
     @Singleton
+    abstract fun bindNetworkSettingsStore(
+        impl: com.locus.core.data.settings.NetworkSettingsStore,
+    ): com.locus.core.domain.settings.NetworkSettingsStore
+
+    @Binds
+    @Singleton
     abstract fun bindModelMetaRepository(impl: RoomModelMetaRepository): ModelMetaRepository
 
     @Binds @Singleton

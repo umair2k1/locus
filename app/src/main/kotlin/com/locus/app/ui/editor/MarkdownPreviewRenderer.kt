@@ -18,6 +18,7 @@ package com.locus.app.ui.editor
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -176,6 +177,29 @@ fun MarkdownPreview(
                 line = line,
                 lineIndex = index,
                 onCheckboxToggle = onCheckboxToggle,
+                onNoteClick = onNoteClick,
+            )
+        }
+    }
+}
+
+/**
+ * Non-lazy markdown content renderer for embedding inside cards, dialogs, or chat bubbles.
+ */
+@Composable
+fun MarkdownContent(
+    body: String,
+    modifier: Modifier = Modifier,
+    onCheckboxToggle: ((lineIndex: Int) -> Unit)? = null,
+    onNoteClick: ((noteId: String) -> Unit)? = null,
+) {
+    val lines = body.lines()
+    Column(modifier = modifier) {
+        lines.forEachIndexed { index, line ->
+            MarkdownLineItem(
+                line = line,
+                lineIndex = index,
+                onCheckboxToggle = { onCheckboxToggle?.invoke(it) },
                 onNoteClick = onNoteClick,
             )
         }

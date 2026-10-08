@@ -136,9 +136,8 @@ fun InlineAiSheet(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = state.resultText.ifBlank { "(No result generated)" },
-                        style = MaterialTheme.typography.bodyMedium,
+                    MarkdownContent(
+                        body = state.resultText.ifBlank { "(No result generated)" },
                         modifier = Modifier.padding(16.dp),
                     )
                 }

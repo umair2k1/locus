@@ -30,6 +30,7 @@ import com.locus.core.domain.backup.ImportExportRepository
 import com.locus.core.domain.backup.LibraryImportOutcome
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.settings.AgentSettingsStore
+import com.locus.core.domain.settings.NetworkSettingsStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,7 @@ class SettingsViewModel
         private val backupSettingsRepo: BackupSettingsRepository,
         private val importExportRepo: ImportExportRepository,
         private val agentSettingsStore: AgentSettingsStore,
+        private val networkSettingsStore: NetworkSettingsStore,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         val rootUri: StateFlow<String?> =
@@ -96,6 +98,14 @@ class SettingsViewModel
                 initialValue = AgentSettingsStore.DEFAULT_BULK_CAP,
             )
 
+        val isCloudDisabled: StateFlow<Boolean> =
+            networkSettingsStore
+                .isCloudDisabled
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                    initialValue = false,
+                )
         val isBackingUp: StateFlow<Boolean> =
             runCatching {
                 WorkManager
@@ -131,6 +141,10 @@ class SettingsViewModel
 
         fun setBulkCap(value: Int) {
             viewModelScope.launch { agentSettingsStore.setBulkCap(value) }
+        }
+
+        fun setCloudDisabled(disabled: Boolean) {
+            viewModelScope.launch { networkSettingsStore.setCloudDisabled(disabled) }
         }
 
         fun setRootFolder(uriString: String) {

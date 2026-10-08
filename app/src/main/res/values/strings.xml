@@ -93,6 +93,11 @@
     <string name="settings_bulk_cap_subtitle">Maximum notes modified per agent run (default: 50)</string>
     <string name="settings_bulk_cap_decrease">Decrease bulk operation cap</string>
     <string name="settings_bulk_cap_increase">Increase bulk operation cap</string>
+    <string name="settings_network_title">Cloud &amp; Network Connection</string>
+    <string name="settings_disable_cloud_title">Disable cloud connection</string>
+    <string name="settings_disable_cloud_subtitle">Enforce 100% offline mode. Blocks external cloud AI providers (OpenAI, Claude, Gemini) and internet connections. Only local on-device models will be used.</string>
+    <string name="settings_disable_cloud_status_offline">Offline Mode (Cloud disabled)</string>
+    <string name="settings_disable_cloud_status_online">Cloud connections allowed</string>
     <string name="search_placeholder">Search notes…</string>
     <string name="search_clear">Clear search</string>
     <string name="search_rescan">Refresh notes</string>

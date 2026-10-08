@@ -16,6 +16,9 @@
 
 package com.locus.core.domain.routing
 
+import com.locus.core.domain.settings.NetworkSettingsStore
+import kotlinx.coroutines.flow.firstOrNull
+
 /**
  * RouteAndSend: the single orchestration point for P-4 + SEC-5 together. [confirmCloudTransition]
  * is a suspend UI callback that must return true only on explicit user consent.
@@ -23,6 +26,7 @@ package com.locus.core.domain.routing
 open class RouteAndSend(
     private val routingTable: RoutingTable,
     private val gate: Sec5TransitionGate,
+    private val networkSettingsStore: NetworkSettingsStore? = null,
 ) {
     @Suppress("ReturnCount")
     open suspend fun route(
@@ -32,6 +36,10 @@ open class RouteAndSend(
             suspend (RouteDecision.RequiresCloudTransitionConfirmation) -> Boolean,
     ): ModelRef {
         val policy = routingTable.policyFor(task)
+        val isCloudDisabled = networkSettingsStore?.isCloudDisabled?.firstOrNull() ?: false
+        if (isCloudDisabled) {
+            return policy.fallback
+        }
         for (candidate in listOfNotNull(policy.default, policy.upgrade)) {
             when (val decision = gate.evaluate(currentModel, candidate)) {
                 is RouteDecision.Direct -> return decision.model

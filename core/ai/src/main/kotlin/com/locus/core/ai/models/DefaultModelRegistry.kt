@@ -29,10 +29,12 @@ import com.locus.core.domain.providers.ProviderAdapter
 import com.locus.core.domain.providers.ProviderCapabilities
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.ModelTier
+import com.locus.core.domain.settings.NetworkSettingsStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import java.io.EOFException
 import java.io.File
@@ -48,6 +50,7 @@ class DefaultModelRegistry
         private val metaRepository: ModelMetaRepository,
         private val deviceProvider: DeviceFingerprintProvider,
         private val providerAdapter: ProviderAdapter? = null,
+        private val networkSettingsStore: NetworkSettingsStore? = null,
     ) : ModelRegistry {
         private var explicitModelsDir: File? = null
 
@@ -57,11 +60,13 @@ class DefaultModelRegistry
             metaRepository: ModelMetaRepository,
             deviceProvider: DeviceFingerprintProvider = DefaultDeviceFingerprintProvider(),
             providerAdapter: ProviderAdapter? = null,
+            networkSettingsStore: NetworkSettingsStore? = null,
         ) : this(
             modelDownloader = null,
             metaRepository = metaRepository,
             deviceProvider = deviceProvider,
             providerAdapter = providerAdapter,
+            networkSettingsStore = networkSettingsStore,
         ) {
             this.explicitModelsDir = modelsDir
         }
@@ -74,13 +79,15 @@ class DefaultModelRegistry
 
         override fun observeModels(): Flow<List<RegistryEntry>> {
             val device = deviceProvider.getDeviceFingerprint()
+            val cloudDisabledFlow = networkSettingsStore?.isCloudDisabled ?: flowOf(false)
             return combine(
                 metaRepository.observeAll(device),
                 refreshTrigger,
-            ) { metaList, _ ->
+                cloudDisabledFlow,
+            ) { metaList, _, isCloudDisabled ->
                 val metaMap = metaList.associateBy { it.modelId }
                 val localEntries = buildLocalEntries(metaMap)
-                val cloudEntries = buildCloudEntries()
+                val cloudEntries = if (isCloudDisabled) emptyList() else buildCloudEntries()
                 localEntries + cloudEntries
             }
         }

@@ -76,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.locus.app.R
+import com.locus.app.ui.editor.MarkdownContent
 import com.locus.app.ui.models.ModelPickerSheet
 import com.locus.core.domain.chat.ChatMessage
 import com.locus.core.domain.chat.ChatRole
@@ -447,10 +448,9 @@ private fun AssistantMessageBubble(
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                MarkdownContent(
+                    body = message.content,
+                    onNoteClick = onSourceClick,
                 )
                 if (message.citations.isNotEmpty()) {
                     CitationsSection(
@@ -542,10 +542,8 @@ private fun StreamingMessageBubble(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    MarkdownContent(
+                        body = text,
                     )
                 }
             }

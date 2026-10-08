@@ -27,6 +27,7 @@ import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
 import com.locus.core.domain.notes.RescanReport
 import com.locus.core.domain.settings.AgentSettingsStore
+import com.locus.core.domain.settings.NetworkSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -57,6 +58,7 @@ class SettingsViewModelTest {
     private lateinit var fakeBackupRepo: FakeBackupSettingsRepository
     private lateinit var fakeImportExportRepo: FakeImportExportRepository
     private lateinit var fakeAgentSettingsStore: FakeAgentSettingsStore
+    private lateinit var fakeNetworkSettingsStore: FakeNetworkSettingsStore
     private lateinit var viewModel: SettingsViewModel
 
     @Before
@@ -67,12 +69,14 @@ class SettingsViewModelTest {
         fakeBackupRepo = FakeBackupSettingsRepository()
         fakeImportExportRepo = FakeImportExportRepository()
         fakeAgentSettingsStore = FakeAgentSettingsStore()
+        fakeNetworkSettingsStore = FakeNetworkSettingsStore()
         viewModel =
             SettingsViewModel(
                 repo = fakeRepo,
                 backupSettingsRepo = fakeBackupRepo,
                 importExportRepo = fakeImportExportRepo,
                 agentSettingsStore = fakeAgentSettingsStore,
+                networkSettingsStore = fakeNetworkSettingsStore,
                 context = context,
             )
     }
@@ -89,6 +93,24 @@ class SettingsViewModelTest {
     fun bulkCap_defaultsTo50() =
         runTest {
             viewModel.bulkCap.test { assertEquals(50, awaitItem()) }
+        }
+
+    @Test
+    fun isCloudDisabled_defaultsToFalse() =
+        runTest {
+            viewModel.isCloudDisabled.test { assertFalse(awaitItem()) }
+        }
+
+    @Test
+    fun setCloudDisabled_updatesStateFlow() =
+        runTest {
+            viewModel.isCloudDisabled.test {
+                assertFalse(awaitItem())
+                viewModel.setCloudDisabled(true)
+                assertTrue(awaitItem())
+                viewModel.setCloudDisabled(false)
+                assertFalse(awaitItem())
+            }
         }
 
     @Test
@@ -263,6 +285,17 @@ class SettingsViewModelTest {
 
         override suspend fun setBulkCap(value: Int) {
             _bulkCap.value = value
+        }
+    }
+
+    private class FakeNetworkSettingsStore(
+        initialCloudDisabled: Boolean = false,
+    ) : NetworkSettingsStore {
+        private val _isCloudDisabled = MutableStateFlow(initialCloudDisabled)
+        override val isCloudDisabled: Flow<Boolean> = _isCloudDisabled
+
+        override suspend fun setCloudDisabled(disabled: Boolean) {
+            _isCloudDisabled.value = disabled
         }
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -103,6 +104,7 @@ fun SettingsScreen(
     val includeApiKeys by viewModel.includeApiKeys.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val bulkCap by viewModel.bulkCap.collectAsState()
+    val isCloudDisabled by viewModel.isCloudDisabled.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(statusMessage) {
@@ -171,6 +173,11 @@ fun SettingsScreen(
             )
 
             NotesFolderCard(rootUri = rootUri, onChangeFolder = { folderLauncher.launch(null) })
+
+            NetworkSettingsCard(
+                isCloudDisabled = isCloudDisabled,
+                onToggleCloudDisabled = { viewModel.setCloudDisabled(it) },
+            )
 
             BackupCard(
                 state =
@@ -381,6 +388,71 @@ private fun AgentSettingsCard(
                 NumericStepper(
                     value = bulkCap,
                     onValueChange = onBulkCapChanged,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetworkSettingsCard(
+    isCloudDisabled: Boolean,
+    onToggleCloudDisabled: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_network_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_disable_cloud_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_disable_cloud_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text =
+                            stringResource(
+                                if (isCloudDisabled) {
+                                    R.string.settings_disable_cloud_status_offline
+                                } else {
+                                    R.string.settings_disable_cloud_status_online
+                                },
+                            ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color =
+                            if (isCloudDisabled) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                    )
+                }
+
+                Switch(
+                    checked = isCloudDisabled,
+                    onCheckedChange = onToggleCloudDisabled,
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = "Disable cloud connection"
+                        },
                 )
             }
         }

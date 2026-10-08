@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.locus.app.ui.editor.MarkdownContent
 import com.locus.core.domain.dashboard.ActionItem
 import com.locus.core.domain.dashboard.ClusterCard
 import com.locus.core.domain.dashboard.DashboardSubJob
@@ -200,9 +201,8 @@ private fun DigestSection(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 } else {
-                    Text(
-                        text = digest.overallSummary,
-                        style = MaterialTheme.typography.bodyMedium,
+                    MarkdownContent(
+                        body = digest.overallSummary,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(text = "Updated Notes:", style = MaterialTheme.typography.labelLarge)

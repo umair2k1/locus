@@ -20,6 +20,7 @@ import com.locus.core.ai.llama.DeviceFingerprintProvider
 import com.locus.core.domain.models.ModelMeta
 import com.locus.core.domain.models.ModelMetaRepository
 import com.locus.core.domain.routing.ModelTier
+import com.locus.core.domain.settings.NetworkSettingsStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -187,6 +188,31 @@ class DefaultModelRegistryTest {
             assertTrue(modelsFromMissing.none { it.ref.tier == ModelTier.LOCAL })
         }
 
+    @Test
+    fun whenCloudDisabled_cloudModelsAreExcluded() =
+        runTest {
+            val localGguf = File(modelsDir, "local-model.gguf")
+            localGguf.writeText("simulated payload")
+
+            val fakeNetworkStore = FakeNetworkSettingsStore(initialCloudDisabled = false)
+            val reg =
+                DefaultModelRegistry(
+                    modelsDir = modelsDir,
+                    metaRepository = fakeMetaRepository,
+                    deviceProvider = fakeDeviceProvider,
+                    networkSettingsStore = fakeNetworkStore,
+                )
+
+            val initialModels = reg.observeModels().first()
+            assertTrue(initialModels.any { it.ref.tier == ModelTier.CLOUD })
+            assertTrue(initialModels.any { it.ref.tier == ModelTier.LOCAL })
+
+            fakeNetworkStore.setCloudDisabled(true)
+            val offlineModels = reg.observeModels().first()
+            assertFalse(offlineModels.any { it.ref.tier == ModelTier.CLOUD })
+            assertTrue(offlineModels.any { it.ref.tier == ModelTier.LOCAL })
+        }
+
     private class FakeModelMetaRepository : ModelMetaRepository {
         private val metaMap = mutableMapOf<Pair<String, String>, ModelMeta>()
         private val flow = MutableStateFlow<List<ModelMeta>>(emptyList())
@@ -241,5 +267,16 @@ class DefaultModelRegistryTest {
         private val fingerprint: String = "fake-device",
     ) : DeviceFingerprintProvider {
         override fun getDeviceFingerprint(): String = fingerprint
+    }
+
+    private class FakeNetworkSettingsStore(
+        initialCloudDisabled: Boolean = false,
+    ) : NetworkSettingsStore {
+        private val _isCloudDisabled = MutableStateFlow(initialCloudDisabled)
+        override val isCloudDisabled: Flow<Boolean> = _isCloudDisabled
+
+        override suspend fun setCloudDisabled(disabled: Boolean) {
+            _isCloudDisabled.value = disabled
+        }
     }
 }

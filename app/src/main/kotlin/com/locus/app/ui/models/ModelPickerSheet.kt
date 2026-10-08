@@ -129,22 +129,24 @@ fun ModelPickerSheet(
                     }
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SectionTitle(
-                        title = stringResource(R.string.model_picker_cloud_section),
-                        count = cloudModels.size,
-                    )
-                }
+                if (cloudModels.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SectionTitle(
+                            title = stringResource(R.string.model_picker_cloud_section),
+                            count = cloudModels.size,
+                        )
+                    }
 
-                items(cloudModels, key = { it.ref.id }) { entry ->
-                    ModelEntryItem(
-                        entry = entry,
-                        isSelected = selectedModelRef?.id == entry.ref.id,
-                        onClick = { onModelSelected(entry) },
-                    )
+                    items(cloudModels, key = { it.ref.id }) { entry ->
+                        ModelEntryItem(
+                            entry = entry,
+                            isSelected = selectedModelRef?.id == entry.ref.id,
+                            onClick = { onModelSelected(entry) },
+                        )
+                    }
                 }
             }
         }
