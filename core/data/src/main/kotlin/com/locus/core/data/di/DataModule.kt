@@ -20,6 +20,8 @@ import com.locus.core.data.models.RoomModelMetaRepository
 import com.locus.core.data.reminders.AndroidAlarmScheduler
 import com.locus.core.data.reminders.ReminderDao
 import com.locus.core.data.search.RoomKeywordSearch
+import com.locus.core.data.templates.PromptTemplateDao
+import com.locus.core.data.templates.RoomPromptTemplateRepository
 import com.locus.core.data.usage.PriceTableStore
 import com.locus.core.data.usage.RoomUsageTracker
 import com.locus.core.data.usage.UsageDao
@@ -37,6 +39,7 @@ import com.locus.core.domain.notes.YamlCodec
 import com.locus.core.domain.reminders.AlarmScheduler
 import com.locus.core.domain.search.ChunkRepository
 import com.locus.core.domain.search.KeywordSearch
+import com.locus.core.domain.templates.PromptTemplateRepository
 import com.locus.core.domain.usage.UsageTracker
 import dagger.Binds
 import dagger.Module
@@ -114,6 +117,9 @@ abstract class DataModule {
     @Binds @Singleton
     abstract fun bindAuditJournal(impl: RoomAuditJournal): AuditJournal
 
+    @Binds @Singleton
+    abstract fun bindPromptTemplateRepository(impl: RoomPromptTemplateRepository): PromptTemplateRepository
+
     companion object {
         @Provides
         @Singleton
@@ -136,6 +142,7 @@ abstract class DataModule {
                     LocusDatabase.MIGRATION_4_5,
                     LocusDatabase.MIGRATION_5_6,
                     LocusDatabase.MIGRATION_6_7,
+                    LocusDatabase.MIGRATION_7_8,
                 ).build()
 
         @Provides fun provideNoteDao(database: LocusDatabase): NoteDao = database.noteDao()
@@ -153,5 +160,8 @@ abstract class DataModule {
         @Provides fun provideUsageDao(database: LocusDatabase): UsageDao = database.usageDao()
 
         @Provides fun provideAuditDao(database: LocusDatabase): AuditDao = database.auditDao()
+
+        @Provides
+        fun providePromptTemplateDao(database: LocusDatabase): PromptTemplateDao = database.promptTemplateDao()
     }
 }

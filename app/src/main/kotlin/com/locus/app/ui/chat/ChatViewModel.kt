@@ -19,6 +19,9 @@ import com.locus.core.domain.providers.ProviderRole
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.RouteDecision
 import com.locus.core.domain.routing.Sec5TransitionGate
+import com.locus.core.domain.templates.PromptTemplate
+import com.locus.core.domain.templates.PromptTemplateRepository
+import com.locus.core.domain.templates.RenderTemplateUseCase
 import com.locus.core.domain.time.Clock
 import com.locus.core.domain.time.DispatcherProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,6 +45,7 @@ private const val MAX_SESSION_NAME_LENGTH = 30
 private const val SESSION_NAME_ELLIPSIS_LIMIT = 27
 private const val MAX_TITLE_LENGTH = 50
 private const val TITLE_ELLIPSIS_LIMIT = 47
+private const val STOP_TIMEOUT_MILLIS = 5_000L
 
 data class ChatUiState(
     val sessions: List<ChatSession> = emptyList(),
@@ -75,6 +80,8 @@ class ChatViewModel
         private val thermalMonitor: ThermalMonitor? = null,
         private val coordinator: com.locus.core.domain.agent.AgentRunCoordinator? = null,
         private val auditJournal: com.locus.core.domain.agent.AuditJournal? = null,
+        private val promptTemplateRepository: PromptTemplateRepository? = null,
+        private val renderTemplateUseCase: RenderTemplateUseCase? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ChatUiState())
         val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -85,6 +92,17 @@ class ChatViewModel
 
         private val _undoableAction = MutableStateFlow<UndoableAction?>(null)
         val undoableAction: StateFlow<UndoableAction?> = _undoableAction.asStateFlow()
+
+        val promptTemplates: StateFlow<List<PromptTemplate>> =
+            promptTemplateRepository
+                ?.observeAll()
+                ?.stateIn(
+                    scope = viewModelScope,
+                    started =
+                        kotlinx.coroutines.flow.SharingStarted
+                            .WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                    initialValue = emptyList(),
+                ) ?: MutableStateFlow<List<PromptTemplate>>(emptyList())
 
         private val sec5TransitionGate: Sec5TransitionGate = Sec5TransitionGate()
         private val sessionModelOverrides = mutableMapOf<String, ModelRef>()
@@ -481,4 +499,9 @@ class ChatViewModel
         fun showUndoableAction(action: UndoableAction) {
             _undoableAction.value = action
         }
+
+        fun renderTemplate(template: PromptTemplate): String =
+            renderTemplateUseCase?.render(
+                template.templateBody,
+            ) ?: template.templateBody
     }

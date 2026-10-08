@@ -3,6 +3,8 @@ package com.locus.app.ui.editor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,13 +28,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.locus.core.domain.notes.InlineAiAction
+import com.locus.core.domain.templates.PromptTemplate
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun InlineAiSheet(
     state: InlineAiReviewState,
     onAccept: () -> Unit,
     onDismiss: () -> Unit,
+    templates: List<PromptTemplate> = emptyList(),
+    onSelectTemplate: ((PromptTemplate) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val title =
@@ -60,6 +67,26 @@ fun InlineAiSheet(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+
+            if (templates.isNotEmpty() && onSelectTemplate != null) {
+                Text(
+                    text = "Custom Templates:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (tpl in templates) {
+                        SuggestionChip(
+                            onClick = { onSelectTemplate(tpl) },
+                            label = { Text(tpl.title) },
+                        )
+                    }
+                }
+            }
 
             if (state.isLoading) {
                 Box(

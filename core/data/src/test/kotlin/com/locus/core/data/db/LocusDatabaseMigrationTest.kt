@@ -361,4 +361,74 @@ class LocusDatabaseMigrationTest {
         helper.close()
         context.deleteDatabase(v7DbName)
     }
+
+    @Test
+    fun migration7To8_createsPromptTemplatesTable() {
+        val v8DbName = "test_migration_7_8.db"
+        context.deleteDatabase(v8DbName)
+        val config =
+            SupportSQLiteOpenHelper.Configuration
+                .builder(context)
+                .name(v8DbName)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(7) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            db.execSQL(
+                                """
+                                CREATE TABLE IF NOT EXISTS `audit_entries` (
+                                    `id` TEXT NOT NULL,
+                                    `toolName` TEXT NOT NULL,
+                                    `argumentsJson` TEXT NOT NULL,
+                                    `affectedNoteIds` TEXT NOT NULL,
+                                    `timestamp` INTEGER NOT NULL,
+                                    `modelId` TEXT NOT NULL,
+                                    `diff` TEXT NOT NULL,
+                                    PRIMARY KEY(`id`)
+                                )
+                                """.trimIndent(),
+                            )
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            // no-op
+                        }
+                    },
+                ).build()
+
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val helper = factory.create(config)
+        val v7Db = helper.writableDatabase
+
+        // Execute MIGRATION_7_8
+        LocusDatabase.MIGRATION_7_8.migrate(v7Db)
+
+        // Verify prompt_templates exists and allows insertion
+        v7Db.execSQL(
+            """
+            INSERT INTO prompt_templates (id, title, templateBody, createdAt)
+            VALUES ('tpl-1', 'Summarize', 'Summarize: {{note}}', 1700000000)
+            """.trimIndent(),
+        )
+
+        val cursor =
+            v7Db.query(
+                """
+                SELECT id, title, templateBody, createdAt
+                FROM prompt_templates WHERE id = 'tpl-1'
+                """.trimIndent(),
+            )
+        assertTrue(cursor.moveToFirst())
+        assertEquals("tpl-1", cursor.getString(0))
+        assertEquals("Summarize", cursor.getString(1))
+        assertEquals("Summarize: {{note}}", cursor.getString(2))
+        assertEquals(1700000000L, cursor.getLong(3))
+        cursor.close()
+
+        helper.close()
+        context.deleteDatabase(v8DbName)
+    }
 }

@@ -31,6 +31,7 @@ import com.locus.app.ui.editor.EditorScreen
 import com.locus.app.ui.grid.GridScreen
 import com.locus.app.ui.models.ModelManagerScreen
 import com.locus.app.ui.search.SearchScreen
+import com.locus.app.ui.settings.PromptTemplatesScreen
 import com.locus.app.ui.settings.SettingsScreen
 import com.locus.app.ui.settings.UsageSummaryScreen
 import com.locus.app.ui.trash.TrashScreen
@@ -128,6 +129,9 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateToAuditJournal = {
                 navController.navigate(LocusDestinations.AUDIT_JOURNAL_ROUTE)
             },
+            onNavigateToPromptTemplates = {
+                navController.navigate(LocusDestinations.PROMPT_TEMPLATES_ROUTE)
+            },
         )
     }
     composable(LocusDestinations.SEARCH_ROUTE) {
@@ -184,6 +188,11 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
     }
     composable(LocusDestinations.AUDIT_JOURNAL_ROUTE) {
         AuditJournalScreen(
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+    composable(LocusDestinations.PROMPT_TEMPLATES_ROUTE) {
+        PromptTemplatesScreen(
             onNavigateBack = { navController.popBackStack() },
         )
     }

@@ -71,6 +71,7 @@ fun SettingsScreen(
     onNavigateToModelManager: () -> Unit = {},
     onNavigateToUsageSummary: () -> Unit = {},
     onNavigateToAuditJournal: () -> Unit = {},
+    onNavigateToPromptTemplates: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -172,6 +173,7 @@ fun SettingsScreen(
             LocalModelsCard(onManageModels = onNavigateToModelManager)
             UsageTrackingCard(onViewUsage = onNavigateToUsageSummary)
             AuditJournalCard(onViewAuditJournal = onNavigateToAuditJournal)
+            PromptTemplatesCard(onManageTemplates = onNavigateToPromptTemplates)
             ImportExportCard(
                 includeApiKeys = includeApiKeys,
                 actions =
@@ -287,6 +289,33 @@ private fun AuditJournalCard(
                 onClick = onViewAuditJournal,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("View Audit Journal") }
+        }
+    }
+}
+
+@Composable
+private fun PromptTemplatesCard(
+    onManageTemplates: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Prompt Templates",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Create and manage user-defined prompt templates with placeholders",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onManageTemplates,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Manage Templates") }
         }
     }
 }

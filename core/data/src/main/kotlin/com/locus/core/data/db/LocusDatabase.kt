@@ -14,6 +14,8 @@ import com.locus.core.data.models.ModelMetaDao
 import com.locus.core.data.models.ModelMetaEntity
 import com.locus.core.data.reminders.ReminderDao
 import com.locus.core.data.reminders.ReminderEntity
+import com.locus.core.data.templates.PromptTemplateDao
+import com.locus.core.data.templates.PromptTemplateEntity
 import com.locus.core.data.usage.UsageDao
 import com.locus.core.data.usage.UsageEntity
 import com.locus.core.data.vector.ChunkDao
@@ -32,8 +34,9 @@ import com.locus.core.data.vector.EmbeddingConverters
             ModelMetaEntity::class,
             UsageEntity::class,
             AuditEntryEntity::class,
+            PromptTemplateEntity::class,
         ],
-    version = 7,
+    version = 8,
 )
 @TypeConverters(Converters::class, EmbeddingConverters::class)
 abstract class LocusDatabase : RoomDatabase() {
@@ -51,6 +54,8 @@ abstract class LocusDatabase : RoomDatabase() {
 
     abstract fun auditDao(): AuditDao
 
+    abstract fun promptTemplateDao(): PromptTemplateDao
+
     companion object {
         private const val VERSION_1 = 1
         private const val VERSION_2 = 2
@@ -59,6 +64,7 @@ abstract class LocusDatabase : RoomDatabase() {
         private const val VERSION_5 = 5
         private const val VERSION_6 = 6
         private const val VERSION_7 = 7
+        private const val VERSION_8 = 8
         val MIGRATION_1_2 =
             object : Migration(VERSION_1, VERSION_2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -199,6 +205,23 @@ abstract class LocusDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_audit_entries_timestamp` ON `audit_entries` (`timestamp`)",
+                    )
+                }
+            }
+
+        val MIGRATION_7_8 =
+            object : Migration(VERSION_7, VERSION_8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `prompt_templates` (
+                            `id` TEXT NOT NULL,
+                            `title` TEXT NOT NULL,
+                            `templateBody` TEXT NOT NULL,
+                            `createdAt` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent(),
                     )
                 }
             }

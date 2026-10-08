@@ -1,6 +1,7 @@
 package com.locus.app.ui.chat
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,6 +85,8 @@ fun ChatScreen(
     val pendingConfirmation by viewModel.pendingConfirmation.collectAsState()
     val undoableAction by viewModel.undoableAction.collectAsState()
     val pendingCloudTransition by viewModel.pendingCloudTransition.collectAsState()
+    val promptTemplates by viewModel.promptTemplates.collectAsState()
+    var showTemplatePicker by remember { mutableStateOf(false) }
     var showSessionSheet by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
@@ -112,6 +117,16 @@ fun ChatScreen(
         },
         bottomBar = {
             Column {
+                if (promptTemplates.isNotEmpty() && (inputText.startsWith("/") || showTemplatePicker)) {
+                    TemplatePickerRow(
+                        templates = promptTemplates,
+                        onSelectTemplate = { tpl ->
+                            inputText = viewModel.renderTemplate(tpl)
+                            showTemplatePicker = false
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
                 undoableAction?.let { action ->
                     UndoableActionCard(
                         action = action,
@@ -607,6 +622,39 @@ private fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun TemplatePickerRow(
+    templates: List<com.locus.core.domain.templates.PromptTemplate>,
+    onSelectTemplate: (com.locus.core.domain.templates.PromptTemplate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(BANNER_CORNER_RADIUS.dp),
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = "Templates (tap to insert):",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (tpl in templates) {
+                    SuggestionChip(
+                        onClick = { onSelectTemplate(tpl) },
+                        label = { Text("/" + tpl.title) },
+                    )
+                }
+            }
         }
     }
 }
