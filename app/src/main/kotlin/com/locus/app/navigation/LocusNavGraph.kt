@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,10 +28,12 @@ import androidx.navigation.navArgument
 import com.locus.app.R
 import com.locus.app.ui.audit.AuditJournalScreen
 import com.locus.app.ui.chat.ChatScreen
+import com.locus.app.ui.dashboard.DashboardScreen
 import com.locus.app.ui.editor.EditorScreen
 import com.locus.app.ui.grid.GridScreen
 import com.locus.app.ui.models.ModelManagerScreen
 import com.locus.app.ui.search.SearchScreen
+import com.locus.app.ui.settings.DashboardSettingsScreen
 import com.locus.app.ui.settings.PromptTemplatesScreen
 import com.locus.app.ui.settings.SettingsScreen
 import com.locus.app.ui.settings.UsageSummaryScreen
@@ -54,6 +57,11 @@ private val topLevelDestinations =
             route = LocusDestinations.TREE_ROUTE,
             labelRes = R.string.nav_tree,
             icon = Icons.Default.Menu,
+        ),
+        TopLevelDestination(
+            route = LocusDestinations.DASHBOARD_ROUTE,
+            labelRes = R.string.nav_dashboard,
+            icon = Icons.Default.Star,
         ),
         TopLevelDestination(
             route = LocusDestinations.SETTINGS_ROUTE,
@@ -117,6 +125,24 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             },
         )
     }
+    composable(LocusDestinations.DASHBOARD_ROUTE) {
+        DashboardScreen(
+            onNavigateToEditor = { noteId ->
+                navController.navigate(LocusDestinations.editorRoute(noteId))
+            },
+            onNavigateToCluster = { noteIds ->
+                navController.navigate(LocusDestinations.searchRoute(noteIds))
+            },
+            onNavigateToSettings = {
+                navController.navigate(LocusDestinations.DASHBOARD_SETTINGS_ROUTE)
+            },
+        )
+    }
+    composable(LocusDestinations.DASHBOARD_SETTINGS_ROUTE) {
+        DashboardSettingsScreen(
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
     composable(LocusDestinations.SETTINGS_ROUTE) {
         SettingsScreen(
             onNavigateToTrash = { navController.navigate(LocusDestinations.TRASH_ROUTE) },
@@ -132,9 +158,22 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateToPromptTemplates = {
                 navController.navigate(LocusDestinations.PROMPT_TEMPLATES_ROUTE)
             },
+            onNavigateToDashboardSettings = {
+                navController.navigate(LocusDestinations.DASHBOARD_SETTINGS_ROUTE)
+            },
         )
     }
-    composable(LocusDestinations.SEARCH_ROUTE) {
+    composable(
+        route = LocusDestinations.SEARCH_PATTERN,
+        arguments =
+            listOf(
+                navArgument("noteIds") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) {
         SearchScreen(
             onNavigateToEditor = { noteId ->
                 navController.navigate(LocusDestinations.editorRoute(noteId))

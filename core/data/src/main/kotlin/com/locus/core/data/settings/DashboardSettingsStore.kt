@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.locus.core.domain.dashboard.DashboardSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,15 +15,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 val Context.dashboardDataStore: DataStore<Preferences> by preferencesDataStore(name = "dashboard_preferences")
-
-data class DashboardSettings(
-    val intervalHours: Int = 24,
-    val isHeavyJobsConstrained: Boolean = true,
-    val isDigestEnabled: Boolean = true,
-    val isClustersEnabled: Boolean = true,
-    val isActionItemsEnabled: Boolean = true,
-    val isRemindersEnabled: Boolean = true,
-)
 
 @Singleton
 open class DashboardSettingsStore(

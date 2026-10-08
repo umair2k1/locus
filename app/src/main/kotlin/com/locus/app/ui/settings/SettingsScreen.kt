@@ -72,6 +72,7 @@ fun SettingsScreen(
     onNavigateToUsageSummary: () -> Unit = {},
     onNavigateToAuditJournal: () -> Unit = {},
     onNavigateToPromptTemplates: () -> Unit = {},
+    onNavigateToDashboardSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -201,7 +202,7 @@ fun SettingsScreen(
                         },
                     ),
             )
-
+            Button(onClick = onNavigateToDashboardSettings) { Text(stringResource(R.string.dashboard_settings_title)) }
             Button(onClick = onNavigateToTrash) { Text(stringResource(R.string.nav_trash)) }
         }
 

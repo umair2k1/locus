@@ -1,5 +1,6 @@
 package com.locus.app.ui.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.locus.core.domain.notes.Note
@@ -41,10 +42,20 @@ class SearchViewModel
         private val hybridSearchUseCase: HybridSearchUseCase,
         private val noteRepository: NoteRepository,
         private val dispatchers: DispatcherProvider,
+        savedStateHandle: SavedStateHandle? = null,
     ) : ViewModel() {
+        private val initialNoteIds =
+            savedStateHandle
+                ?.get<String>("noteIds")
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                ?: emptySet()
+        private val initialScope = SearchScope(noteIds = initialNoteIds)
         private val queryFlow = MutableStateFlow("")
-        private val scopeFlow = MutableStateFlow(SearchScope())
-        private val _uiState = MutableStateFlow(SearchUiState())
+        private val scopeFlow = MutableStateFlow(initialScope)
+        private val _uiState = MutableStateFlow(SearchUiState(scope = initialScope))
         val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
         init {

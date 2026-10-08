@@ -9,6 +9,7 @@ import androidx.work.WorkerParameters
 import com.locus.core.data.settings.DashboardSettingsStore
 import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
+import com.locus.core.domain.dashboard.DashboardSettings
 import com.locus.core.domain.dashboard.DigestPeriod
 import com.locus.core.domain.dashboard.ExtractActionItemsUseCase
 import com.locus.core.domain.dashboard.ParseRemindersUseCase
@@ -46,14 +47,37 @@ class DashboardWorker
 
         override suspend fun doWork(): Result {
             val settings = settingsStore.settingsFlow.first()
-            if (settings.isDigestEnabled) {
+            val targetSubJob = inputData.getString(KEY_SUB_JOB) ?: SUB_JOB_ALL
+            android.util.Log.d(TAG, "DashboardWorker started with sub-job: $targetSubJob")
+
+            maybeRunDigest(targetSubJob, settings)
+            maybeRunClusters(targetSubJob, settings)
+            maybeRunActionItems(targetSubJob, settings)
+            maybeRunReminders(targetSubJob, settings)
+
+            return Result.success()
+        }
+
+        private suspend fun maybeRunDigest(
+            targetSubJob: String,
+            settings: DashboardSettings,
+        ) {
+            if ((targetSubJob == SUB_JOB_ALL || targetSubJob == SUB_JOB_DIGEST) && settings.isDigestEnabled) {
+                android.util.Log.d(TAG, "Recomputing Digest")
                 val digest = computeDigestUseCase?.execute(DigestPeriod.DAILY)
                 if (digest != null && digestDao != null) {
                     digestDao.insert(DigestEntity.fromDomain(digest))
                 }
                 subJobRunner?.runDigest()
             }
-            if (settings.isClustersEnabled) {
+        }
+
+        private suspend fun maybeRunClusters(
+            targetSubJob: String,
+            settings: DashboardSettings,
+        ) {
+            if ((targetSubJob == SUB_JOB_ALL || targetSubJob == SUB_JOB_CLUSTERS) && settings.isClustersEnabled) {
+                android.util.Log.d(TAG, "Recomputing Clusters")
                 val clusters = computeClustersUseCase?.execute()
                 if (!clusters.isNullOrEmpty() && clusterDao != null) {
                     clusterDao.deleteAll()
@@ -61,7 +85,15 @@ class DashboardWorker
                 }
                 subJobRunner?.runClusters()
             }
-            if (settings.isActionItemsEnabled) {
+        }
+
+        private suspend fun maybeRunActionItems(
+            targetSubJob: String,
+            settings: DashboardSettings,
+        ) {
+            val isActionSubJob = targetSubJob == SUB_JOB_ALL || targetSubJob == SUB_JOB_ACTION_ITEMS
+            if (isActionSubJob && settings.isActionItemsEnabled) {
+                android.util.Log.d(TAG, "Recomputing Action Items")
                 val card = extractActionItemsUseCase?.execute()
                 if (card != null && actionItemDao != null) {
                     actionItemDao.deleteAll()
@@ -73,14 +105,28 @@ class DashboardWorker
                 }
                 subJobRunner?.runActionItems()
             }
-            if (settings.isRemindersEnabled) {
+        }
+
+        private suspend fun maybeRunReminders(
+            targetSubJob: String,
+            settings: DashboardSettings,
+        ) {
+            if ((targetSubJob == SUB_JOB_ALL || targetSubJob == SUB_JOB_REMINDERS) && settings.isRemindersEnabled) {
+                android.util.Log.d(TAG, "Recomputing Reminders")
                 parseRemindersUseCase?.execute()
                 subJobRunner?.runReminders()
             }
-            return Result.success()
         }
 
         companion object {
+            private const val TAG = "DashboardWorker"
+            const val KEY_SUB_JOB = "sub_job"
+            const val SUB_JOB_ALL = "ALL"
+            const val SUB_JOB_DIGEST = "DIGEST"
+            const val SUB_JOB_CLUSTERS = "CLUSTERS"
+            const val SUB_JOB_ACTION_ITEMS = "ACTION_ITEMS"
+            const val SUB_JOB_REMINDERS = "REMINDERS"
+
             fun buildConstraints(constrained: Boolean): Constraints =
                 if (constrained) {
                     Constraints

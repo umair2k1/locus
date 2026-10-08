@@ -11,6 +11,7 @@ import com.locus.core.data.chat.RoomChatRepository
 import com.locus.core.data.dashboard.ActionItemDao
 import com.locus.core.data.dashboard.ClusterDao
 import com.locus.core.data.dashboard.DigestDao
+import com.locus.core.data.dashboard.RoomDashboardRepository
 import com.locus.core.data.db.LocusDatabase
 import com.locus.core.data.db.NoteDao
 import com.locus.core.data.files.AndroidSafNoteFileSource
@@ -34,6 +35,7 @@ import com.locus.core.domain.agent.AuditJournal
 import com.locus.core.domain.backup.BackupSettingsRepository
 import com.locus.core.domain.backup.ImportExportRepository
 import com.locus.core.domain.chat.ChatRepository
+import com.locus.core.domain.dashboard.DashboardRepository
 import com.locus.core.domain.models.ModelMetaRepository
 import com.locus.core.domain.notes.FrontmatterParser
 import com.locus.core.domain.notes.NoteRepository
@@ -122,6 +124,9 @@ abstract class DataModule {
 
     @Binds @Singleton
     abstract fun bindPromptTemplateRepository(impl: RoomPromptTemplateRepository): PromptTemplateRepository
+
+    @Binds @Singleton
+    abstract fun bindDashboardRepository(impl: RoomDashboardRepository): DashboardRepository
 
     companion object {
         @Provides

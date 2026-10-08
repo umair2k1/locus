@@ -2,6 +2,7 @@ package com.locus.app.workers
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -13,6 +14,7 @@ import com.locus.core.ai.catalog.CatalogRefreshWorker
 import com.locus.core.data.backup.BackupWorker
 import com.locus.core.data.dashboard.DashboardWorker
 import com.locus.core.domain.backup.BackupInterval
+import com.locus.core.domain.dashboard.DashboardSubJob
 import java.util.concurrent.TimeUnit
 
 object WorkScheduling {
@@ -100,5 +102,18 @@ object WorkScheduling {
             ExistingPeriodicWorkPolicy.UPDATE,
             request,
         )
+    }
+
+    fun triggerOnDemandDashboardSubJob(
+        context: Context,
+        subJob: DashboardSubJob = DashboardSubJob.ALL,
+    ): Operation {
+        val workManager = WorkManager.getInstance(context)
+        val data = Data.Builder().putString(DashboardWorker.KEY_SUB_JOB, subJob.name).build()
+        val request =
+            OneTimeWorkRequestBuilder<DashboardWorker>()
+                .setInputData(data)
+                .build()
+        return workManager.enqueue(request)
     }
 }

@@ -3,8 +3,11 @@ package com.locus.app.navigation
 object LocusDestinations {
     const val GRID_ROUTE = "grid"
     const val TREE_ROUTE = "tree"
+    const val DASHBOARD_ROUTE = "dashboard"
     const val SETTINGS_ROUTE = "settings"
+    const val DASHBOARD_SETTINGS_ROUTE = "dashboard_settings"
     const val SEARCH_ROUTE = "search"
+    const val SEARCH_PATTERN = "search?noteIds={noteIds}"
     const val TRASH_ROUTE = "trash"
     const val EDITOR_ROUTE = "editor/{noteId}"
     const val CHAT_ROUTE = "chat"
@@ -15,4 +18,7 @@ object LocusDestinations {
     const val NOTE_ID_ARG = "noteId"
 
     fun editorRoute(noteId: String): String = "editor/$noteId"
+
+    fun searchRoute(noteIds: Collection<String> = emptyList()): String =
+        if (noteIds.isEmpty()) "search" else "search?noteIds=${noteIds.joinToString(",")}"
 }
