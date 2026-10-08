@@ -190,6 +190,45 @@ class AgentTurnUiTest {
         }
 
     @Test
+    @Suppress("SwallowedException")
+    fun dashboardActionItem_cannotAutoExecuteAsToolCall_andTriggersInjectionGuardWhenRetrieved() =
+        runTest(testDispatcher) {
+            val call =
+                PendingToolCall(
+                    tool = WriteToolName.TRASH_NOTE,
+                    origin = CallOrigin.RETRIEVED_NOTE_CONTENT,
+                    argumentsJson = """{"noteId": "note-injected"}""",
+                )
+
+            var executed = false
+            launch {
+                try {
+                    coordinator.execute(call) {
+                        executed = true
+                        "trashed"
+                    }
+                } catch (_: ToolConfirmationDeniedException) {
+                    // expected when denied
+                }
+            }
+            advanceUntilIdle()
+
+            val pending = viewModel.pendingConfirmation.value
+            assertNotNull("Must surface confirmation dialog, never auto-execute", pending)
+            val decision = pending!!.request.decision
+            assertTrue(decision is SafetyDecision.AlwaysConfirm)
+            assertEquals(
+                ConfirmReason.PROMPT_INJECTION_GUARD,
+                (decision as SafetyDecision.AlwaysConfirm).reason,
+            )
+            assertFalse("Tool call must not auto-execute without explicit user consent", executed)
+
+            viewModel.confirmPendingAction(false)
+            advanceUntilIdle()
+            assertFalse(executed)
+        }
+
+    @Test
     fun undoAction_revertsViaAuditJournal() =
         runTest(testDispatcher) {
             val action =

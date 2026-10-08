@@ -88,6 +88,9 @@ class ReminderAcceptanceScenarioTest {
 
             override suspend fun getById(id: String): ReminderEntity? = items.find { it.id == id }
 
+            override suspend fun getRemindersByNoteId(noteId: String): List<ReminderEntity> =
+                items.filter { it.noteId == noteId }
+
             override suspend fun getActiveReminders(): List<ReminderEntity> = items.filter { it.active }
 
             override fun observeActiveReminders(): Flow<List<ReminderEntity>> = throw UnsupportedOperationException()
