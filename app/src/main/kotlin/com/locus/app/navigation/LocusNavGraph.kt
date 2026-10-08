@@ -26,6 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.locus.app.R
+import com.locus.app.flavor.addFlavorDestinations
 import com.locus.app.ui.audit.AuditJournalScreen
 import com.locus.app.ui.chat.ChatScreen
 import com.locus.app.ui.dashboard.DashboardScreen
@@ -165,6 +166,9 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateToKeepImport = {
                 navController.navigate(LocusDestinations.KEEP_IMPORT_ROUTE)
             },
+            onNavigateToSubscriptionLogin = {
+                navController.navigate(LocusDestinations.SUBSCRIPTION_LOGIN_ROUTE)
+            },
         )
     }
     composable(LocusDestinations.KEEP_IMPORT_ROUTE) {
@@ -244,6 +248,7 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateBack = { navController.popBackStack() },
         )
     }
+    addFlavorDestinations(navController)
 }
 
 @Composable

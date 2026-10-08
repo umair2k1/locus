@@ -75,6 +75,7 @@ fun SettingsScreen(
     onNavigateToPromptTemplates: () -> Unit = {},
     onNavigateToDashboardSettings: () -> Unit = {},
     onNavigateToKeepImport: () -> Unit = {},
+    onNavigateToSubscriptionLogin: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -206,6 +207,11 @@ fun SettingsScreen(
                     ),
             )
             Button(onClick = onNavigateToDashboardSettings) { Text(stringResource(R.string.dashboard_settings_title)) }
+            if (com.locus.app.BuildConfig.HAS_SUBSCRIPTION_ADAPTERS) {
+                Button(onClick = onNavigateToSubscriptionLogin) {
+                    Text("Subscription Accounts (Full)")
+                }
+            }
             Button(onClick = onNavigateToTrash) { Text(stringResource(R.string.nav_trash)) }
         }
 

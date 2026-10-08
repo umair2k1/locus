@@ -20,11 +20,20 @@ android {
 
     flavorDimensions += "distribution"
     productFlavors {
-        create("oss") { dimension = "distribution" }
-        create("full") { dimension = "distribution" }
+        create("oss") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "HAS_SUBSCRIPTION_ADAPTERS", "false")
+        }
+        create("full") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "HAS_SUBSCRIPTION_ADAPTERS", "true")
+        }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -80,8 +80,10 @@ class ReminderActionReceiverTest {
 
             override suspend fun getById(id: String): ReminderEntity? = items.find { it.id == id }
 
-            override suspend fun getRemindersByNoteId(noteId: String): List<ReminderEntity> =
-                items.filter { it.noteId == noteId }
+            override suspend fun getRemindersByNoteId(noteId: String): List<ReminderEntity> {
+                val matched = items.filter { it.noteId == noteId }
+                return matched
+            }
 
             override suspend fun getActiveReminders(): List<ReminderEntity> = items.filter { it.active }
 

@@ -19,8 +19,14 @@ class KeepTakeoutParserTest {
             KeepTakeoutParserTest::class.java.classLoader?.getResourceAsStream("keep-fixtures/$name")
                 ?: KeepTakeoutParserTest::class.java.getResourceAsStream("/keep-fixtures/$name")
                 ?: Thread.currentThread().contextClassLoader?.getResourceAsStream("keep-fixtures/$name")
-                ?: java.io.File("src/test/resources/keep-fixtures/$name").takeIf { it.exists() }?.inputStream()
-                ?: java.io.File("core/data/src/test/resources/keep-fixtures/$name").takeIf { it.exists() }?.inputStream()
+                ?: java.io
+                    .File("src/test/resources/keep-fixtures/$name")
+                    .takeIf { it.exists() }
+                    ?.inputStream()
+                ?: java.io
+                    .File("core/data/src/test/resources/keep-fixtures/$name")
+                    .takeIf { it.exists() }
+                    ?.inputStream()
                 ?: error("Fixture $name not found")
         return stream.bufferedReader().use { it.readText() }
     }
