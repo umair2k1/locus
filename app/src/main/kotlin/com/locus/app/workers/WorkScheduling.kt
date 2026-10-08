@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.locus.core.ai.catalog.CatalogRefreshWorker
 import com.locus.core.data.backup.BackupWorker
+import com.locus.core.data.dashboard.DashboardWorker
 import com.locus.core.domain.backup.BackupInterval
 import java.util.concurrent.TimeUnit
 
@@ -18,6 +19,7 @@ object WorkScheduling {
     const val PERIODIC_BACKUP_WORK_NAME = "com.locus.app.backup.periodic"
     const val ON_DEMAND_BACKUP_WORK_NAME = "com.locus.app.backup.on_demand"
     const val PERIODIC_CATALOG_REFRESH_WORK_NAME = "com.locus.app.catalog.refresh.periodic"
+    const val PERIODIC_DASHBOARD_WORK_NAME = "com.locus.app.dashboard.periodic"
 
     fun schedulePeriodicBackup(
         context: Context,
@@ -75,6 +77,27 @@ object WorkScheduling {
         return workManager.enqueueUniquePeriodicWork(
             PERIODIC_CATALOG_REFRESH_WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    fun schedulePeriodicDashboard(
+        context: Context,
+        intervalHours: Long = 24L,
+        isHeavyJobsConstrained: Boolean = true,
+    ): Operation {
+        val workManager = WorkManager.getInstance(context)
+        val constraints = DashboardWorker.buildConstraints(isHeavyJobsConstrained)
+        val request =
+            PeriodicWorkRequestBuilder<DashboardWorker>(
+                repeatInterval = intervalHours,
+                repeatIntervalTimeUnit = TimeUnit.HOURS,
+            ).setConstraints(constraints)
+                .build()
+
+        return workManager.enqueueUniquePeriodicWork(
+            PERIODIC_DASHBOARD_WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request,
         )
     }
