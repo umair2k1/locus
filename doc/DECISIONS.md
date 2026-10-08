@@ -21,3 +21,6 @@
 ## D-8: I-1 inline AI actions target English-only for TRANSLATE per NF-4 non-goal (ruling out non-Latin / other-language UI; "translate" normalizes foreign snippets pasted by users into English rather than providing an unbounded language picker).
 
 ## D-9: Inline AI single-shot actions (I-1) route through RouteAndSend with TaskType.CHAT_RAG_QA as the closest existing P-4 routing row, since P-4 does not define a dedicated inline-action routing row.
+
+## D-10: Topic clustering k-selection heuristic (D-1, D-6)
+To satisfy Prompt 69's requirement for deterministic topic clustering over note embedding centroids, k-means is used with initial centroids deterministically spaced across sorted note IDs. The number of clusters $k$ is calculated as $k = \operatorname{round}(\sqrt{\text{noteCount} / 2})$, clamped to $[1, \min(\text{noteCount}, 10)]$. For note counts $\le 2$, $k = \text{noteCount}$. Each cluster is labeled via a routed LLM task adhering to `TaskType.DIGEST_TAGGING_CLUSTER_LABEL` rather than hardcoding a cloud provider.

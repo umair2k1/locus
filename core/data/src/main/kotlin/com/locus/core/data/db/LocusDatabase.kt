@@ -10,6 +10,8 @@ import com.locus.core.data.audit.AuditEntryEntity
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.ChatMessageEntity
 import com.locus.core.data.chat.ChatSessionEntity
+import com.locus.core.data.dashboard.ClusterDao
+import com.locus.core.data.dashboard.ClusterEntity
 import com.locus.core.data.dashboard.DigestDao
 import com.locus.core.data.dashboard.DigestEntity
 import com.locus.core.data.models.ModelMetaDao
@@ -38,8 +40,9 @@ import com.locus.core.data.vector.EmbeddingConverters
             AuditEntryEntity::class,
             PromptTemplateEntity::class,
             DigestEntity::class,
+            ClusterEntity::class,
         ],
-    version = 9,
+    version = 10,
 )
 @TypeConverters(Converters::class, EmbeddingConverters::class)
 abstract class LocusDatabase : RoomDatabase() {
@@ -61,6 +64,8 @@ abstract class LocusDatabase : RoomDatabase() {
 
     abstract fun digestDao(): DigestDao
 
+    abstract fun clusterDao(): ClusterDao
+
     companion object {
         private const val VERSION_1 = 1
         private const val VERSION_2 = 2
@@ -71,6 +76,7 @@ abstract class LocusDatabase : RoomDatabase() {
         private const val VERSION_7 = 7
         private const val VERSION_8 = 8
         private const val VERSION_9 = 9
+        private const val VERSION_10 = 10
         val MIGRATION_1_2 =
             object : Migration(VERSION_1, VERSION_2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -252,6 +258,26 @@ abstract class LocusDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_digests_computedAt` ON `digests` (`computedAt`)",
+                    )
+                }
+            }
+
+        val MIGRATION_9_10 =
+            object : Migration(VERSION_9, VERSION_10) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `clusters` (
+                            `id` TEXT NOT NULL,
+                            `label` TEXT NOT NULL,
+                            `noteIdsJson` TEXT NOT NULL,
+                            `computedAt` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_clusters_computedAt` ON `clusters` (`computedAt`)",
                     )
                 }
             }

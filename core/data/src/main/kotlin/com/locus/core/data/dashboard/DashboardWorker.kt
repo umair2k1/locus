@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.NetworkType
 import androidx.work.WorkerParameters
 import com.locus.core.data.settings.DashboardSettingsStore
+import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
 import com.locus.core.domain.dashboard.DigestPeriod
 import dagger.assisted.Assisted
@@ -25,6 +26,7 @@ interface DashboardSubJobRunner {
 
 @HiltWorker
 class DashboardWorker
+    @Suppress("LongParameterList")
     @AssistedInject
     constructor(
         @Assisted appContext: Context,
@@ -32,6 +34,8 @@ class DashboardWorker
         private val settingsStore: DashboardSettingsStore,
         private val digestDao: DigestDao? = null,
         private val computeDigestUseCase: ComputeDigestUseCase? = null,
+        private val clusterDao: ClusterDao? = null,
+        private val computeClustersUseCase: ComputeClustersUseCase? = null,
     ) : CoroutineWorker(appContext, params) {
         var subJobRunner: DashboardSubJobRunner? = null
 
@@ -45,6 +49,11 @@ class DashboardWorker
                 subJobRunner?.runDigest()
             }
             if (settings.isClustersEnabled) {
+                val clusters = computeClustersUseCase?.execute()
+                if (!clusters.isNullOrEmpty() && clusterDao != null) {
+                    clusterDao.deleteAll()
+                    clusterDao.insertAll(clusters.map { ClusterEntity.fromDomain(it) })
+                }
                 subJobRunner?.runClusters()
             }
             if (settings.isActionItemsEnabled) {

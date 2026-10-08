@@ -4,12 +4,12 @@ package com.locus.core.domain.routing
  * RouteAndSend: the single orchestration point for P-4 + SEC-5 together. [confirmCloudTransition]
  * is a suspend UI callback that must return true only on explicit user consent.
  */
-class RouteAndSend(
+open class RouteAndSend(
     private val routingTable: RoutingTable,
     private val gate: Sec5TransitionGate,
 ) {
     @Suppress("ReturnCount")
-    suspend fun route(
+    open suspend fun route(
         task: TaskType,
         currentModel: ModelRef,
         confirmCloudTransition:

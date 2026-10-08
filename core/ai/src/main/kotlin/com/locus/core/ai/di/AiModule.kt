@@ -18,6 +18,7 @@ import com.locus.core.ai.providers.OpenAiCompatibleAdapter
 import com.locus.core.domain.chat.ActiveModelRepository
 import com.locus.core.domain.chat.ChatModelClient
 import com.locus.core.domain.chat.RagAnswerUseCase
+import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
 import com.locus.core.domain.models.DeviceCapabilitiesGateway
 import com.locus.core.domain.models.ModelManagerRepository
@@ -26,6 +27,7 @@ import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.SuggestTagsUseCase
 import com.locus.core.domain.providers.ProviderAdapter
+import com.locus.core.domain.search.ChunkRepository
 import com.locus.core.domain.search.EmbeddingGateway
 import com.locus.core.domain.search.HybridSearchUseCase
 import com.locus.core.domain.time.Clock
@@ -188,6 +190,21 @@ abstract class AiModule {
             clock: Clock,
         ): ComputeDigestUseCase =
             ComputeDigestUseCase(
+                noteRepository = noteRepository,
+                chatModelClient = providerAdapter,
+                clock = clock,
+            )
+
+        @Provides
+        @Singleton
+        fun provideComputeClustersUseCase(
+            chunkRepository: ChunkRepository,
+            noteRepository: NoteRepository,
+            providerAdapter: ProviderAdapter,
+            clock: Clock,
+        ): ComputeClustersUseCase =
+            ComputeClustersUseCase(
+                chunkRepository = chunkRepository,
                 noteRepository = noteRepository,
                 chatModelClient = providerAdapter,
                 clock = clock,
