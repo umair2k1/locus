@@ -46,6 +46,11 @@ interface ModelManagerRepository {
 
     suspend fun deleteModel(filename: String): Boolean
 
+    suspend fun importModel(
+        filename: String,
+        sourceBytes: ByteArray,
+    ): Result<DownloadedModel> = Result.failure(UnsupportedOperationException("importModel not implemented"))
+
     suspend fun getStorageStats(): ModelStorageStats
 
     fun observeAllModelMeta(): Flow<List<ModelMeta>>

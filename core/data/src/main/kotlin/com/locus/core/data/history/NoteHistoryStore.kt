@@ -61,15 +61,17 @@ open class NoteHistoryStore
             withContext(Dispatchers.IO) {
                 val cleanBody = extractBody(previousBody)
                 if (cleanBody.isEmpty()) return@withContext
+                val title = extractTitle(previousBody)
+                val snapshotContent = buildSnapshotContent(title = title, body = cleanBody)
 
                 val treeUri = treeUriStore.getTreeUri()
                 if (treeUri != null && isSafContentUri(treeUri)) {
-                    snapshotSaf(noteId, cleanBody, treeUri)
+                    snapshotSaf(noteId, snapshotContent, treeUri)
                 } else {
                     val rootDir = resolveFileRootDir(treeUri, rootHint)
                     noteIdToRootDir[noteId] = rootDir
                     lastKnownRootDir = rootDir
-                    snapshotDirectFile(noteId, cleanBody, rootDir)
+                    snapshotDirectFile(noteId, snapshotContent, rootDir)
                 }
             }
 
@@ -216,10 +218,12 @@ open class NoteHistoryStore
                 .mapNotNull { file ->
                     val timestamp =
                         file.name?.removeSuffix(MD_EXT)?.toLongOrNull() ?: file.lastModified()
-                    val body =
+                    val rawText =
                         runCatching { fileSource.readText(file) }.getOrNull()
                             ?: return@mapNotNull null
-                    HistoryRevision(timestamp = timestamp, body = body)
+                    val title = extractTitle(rawText)
+                    val body = extractBody(rawText)
+                    HistoryRevision(timestamp = timestamp, body = body, title = title)
                 }.sortedByDescending { it.timestamp }
         }
 
@@ -235,10 +239,12 @@ open class NoteHistoryStore
                 ?.mapNotNull { file ->
                     val timestamp =
                         file.name.removeSuffix(MD_EXT).toLongOrNull() ?: file.lastModified()
-                    val body =
+                    val rawText =
                         runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
                             ?: return@mapNotNull null
-                    HistoryRevision(timestamp = timestamp, body = body)
+                    val title = extractTitle(rawText)
+                    val body = extractBody(rawText)
+                    HistoryRevision(timestamp = timestamp, body = body, title = title)
                 }?.sortedByDescending { it.timestamp }
                 .orEmpty()
         }
@@ -262,6 +268,39 @@ open class NoteHistoryStore
             }
         }
 
+        internal fun extractTitle(raw: String): String {
+            val frontmatterMatch = FRONTMATTER_REGEX.find(raw)
+            if (frontmatterMatch != null) {
+                val yaml = frontmatterMatch.value
+                val titleMatch = TITLE_FIELD_REGEX.find(yaml)
+                if (titleMatch != null) {
+                    val parsed =
+                        titleMatch.groupValues[1]
+                            .trim()
+                            .removeSurrounding("\"")
+                            .removeSurrounding("'")
+                    if (parsed.isNotBlank()) return parsed
+                }
+            }
+            // Fallback: search for first markdown heading (# Heading)
+            val headingMatch = FIRST_HEADING_REGEX.find(raw)
+            if (headingMatch != null) {
+                val heading = headingMatch.groupValues[1].trim()
+                if (heading.isNotBlank()) return heading
+            }
+            return ""
+        }
+
+        private fun buildSnapshotContent(
+            title: String,
+            body: String,
+        ): String =
+            if (title.isNotBlank()) {
+                "---\ntitle: $title\n---\n$body"
+            } else {
+                body
+            }
+
         private class FallbackContext(
             private val baseDir: File = File("."),
         ) : ContextWrapper(null) {
@@ -275,5 +314,7 @@ open class NoteHistoryStore
             private const val MD_EXT = ".md"
             private const val MIME_TYPE_MARKDOWN = "text/markdown"
             private val FRONTMATTER_REGEX = Regex("(?s)\\A---\\r?\\n.*?\\r?\\n---\\r?\\n?")
+            private val TITLE_FIELD_REGEX = Regex("""(?m)^title:\s*(.*)$""")
+            private val FIRST_HEADING_REGEX = Regex("""(?m)^#{1,6}\s+(.*)$""")
         }
     }

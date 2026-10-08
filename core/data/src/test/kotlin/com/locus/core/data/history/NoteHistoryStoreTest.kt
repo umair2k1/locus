@@ -90,6 +90,20 @@ class NoteHistoryStoreTest {
             assertEquals(1, revisions.size)
             val expectedBody = "# Pure Body\nHere is the actual note content."
             assertEquals(expectedBody, revisions[0].body)
+            assertEquals("Frontmatter Note", revisions[0].title)
+        }
+
+    @Test
+    fun snapshot_extractsTitleFromHeadingFallback() =
+        runTest {
+            val noteId = "note-heading-title"
+            val rawFile = "# Note Heading Title\nJust body without frontmatter"
+            historyStore.snapshot(noteId, rawFile)
+
+            val revisions = historyStore.listRevisions(noteId)
+            assertEquals(1, revisions.size)
+            assertEquals("Note Heading Title", revisions[0].title)
+            assertEquals(rawFile, revisions[0].body)
         }
 
     @Test

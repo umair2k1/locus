@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +68,7 @@ fun ModelPickerSheet(
     selectedModelRef: ModelRef?,
     onModelSelected: (RegistryEntry) -> Unit,
     onDismissRequest: () -> Unit,
+    onLoadOfflineModelClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
 ) {
@@ -75,6 +78,7 @@ fun ModelPickerSheet(
         selectedModelRef = selectedModelRef,
         onModelSelected = onModelSelected,
         onDismissRequest = onDismissRequest,
+        onLoadOfflineModelClick = onLoadOfflineModelClick,
         modifier = modifier,
         sheetState = sheetState,
     )
@@ -88,6 +92,7 @@ fun ModelPickerSheet(
     selectedModelRef: ModelRef?,
     onModelSelected: (RegistryEntry) -> Unit,
     onDismissRequest: () -> Unit,
+    onLoadOfflineModelClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
 ) {
@@ -115,6 +120,23 @@ fun ModelPickerSheet(
                         title = stringResource(R.string.model_picker_local_section),
                         count = localModels.size,
                     )
+                }
+
+                if (onLoadOfflineModelClick != null) {
+                    item {
+                        OutlinedButton(
+                            onClick = onLoadOfflineModelClick,
+                            modifier = Modifier.fillMaxWidth().testTag("load_offline_model_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = stringResource(R.string.model_picker_load_offline_file))
+                        }
+                    }
                 }
 
                 if (localModels.isEmpty()) {

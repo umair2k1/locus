@@ -484,6 +484,18 @@ class ModelDownloader
                 ?: emptyList()
         }
 
+        suspend fun importModelFile(
+            filename: String,
+            sourceBytes: ByteArray,
+        ): File =
+            withContext(Dispatchers.IO) {
+                val targetFile = getModelFile(filename)
+                val parent = targetFile.parentFile ?: getModelsDirectory()
+                if (!parent.exists()) parent.mkdirs()
+                targetFile.writeBytes(sourceBytes)
+                targetFile
+            }
+
         suspend fun deleteModel(filename: String): Boolean =
             withContext(Dispatchers.IO) {
                 val targetFile = getModelFile(filename)

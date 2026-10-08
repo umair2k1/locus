@@ -24,6 +24,7 @@ import com.locus.core.domain.chat.ChatRole
 import com.locus.core.domain.chat.ChatSession
 import com.locus.core.domain.chat.RagAnswerUseCase
 import com.locus.core.domain.chat.ThermalMonitor
+import com.locus.core.domain.models.ModelManagerRepository
 import com.locus.core.domain.models.ModelRegistry
 import com.locus.core.domain.models.RegistryEntry
 import com.locus.core.domain.notes.Note
@@ -101,6 +102,7 @@ class ChatViewModel
         private val promptTemplateRepository: PromptTemplateRepository? = null,
         private val renderTemplateUseCase: RenderTemplateUseCase? = null,
         private val networkSettingsStore: NetworkSettingsStore? = null,
+        private val modelManagerRepository: ModelManagerRepository? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ChatUiState())
         val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -251,6 +253,45 @@ class ChatViewModel
                     contextLength = entry.contextLength,
                 )
             _uiState.update { it.copy(activeModel = modelInfo) }
+        }
+
+        fun importAndSelectOfflineModel(
+            filename: String,
+            bytes: ByteArray,
+            onResult: (Boolean, String) -> Unit,
+        ) {
+            viewModelScope.launch(dispatchers.io) {
+                val repo = modelManagerRepository
+                if (repo == null) {
+                    withContext(dispatchers.main) { onResult(false, "Model manager not available") }
+                    return@launch
+                }
+                val result = repo.importModel(filename, bytes)
+                result.fold(
+                    onSuccess = { downloaded ->
+                        modelRegistry?.refresh()
+                        val localRef =
+                            ModelRef(id = downloaded.filename, tier = com.locus.core.domain.routing.ModelTier.LOCAL, providerId = null)
+                        val entry =
+                            RegistryEntry(
+                                ref = localRef,
+                                contextLength = 4096,
+                                capabilities = null,
+                                isOffline = true,
+                                benchmarkedTokPerSecond = null,
+                            )
+                        withContext(dispatchers.main) {
+                            selectModel(entry)
+                            onResult(true, downloaded.filename)
+                        }
+                    },
+                    onFailure = { error ->
+                        withContext(dispatchers.main) {
+                            onResult(false, error.message ?: "Failed to import model")
+                        }
+                    },
+                )
+            }
         }
 
         private fun updateMessagesObservation(sessionId: String?) {

@@ -183,6 +183,10 @@
     <string name="model_picker_offline_badge">Offline</string>
     <string name="model_picker_cloud_badge">Cloud</string>
     <string name="model_picker_no_local_models">No local models found in models directory. Copy .gguf files or download from Model Manager.</string>
+    <string name="model_picker_load_offline_file">Load Offline Model (.gguf)</string>
+    <string name="model_picker_loading_model">Importing %1$s…</string>
+    <string name="model_picker_loaded_success">Loaded offline model: %1$s</string>
+    <string name="model_picker_loaded_failure">Failed to import model: %1$s</string>
     <string name="model_picker_native_tools">Native tools</string>
     <string name="model_picker_price_format">$%1$.2f/M in</string>
     <string name="model_picker_benchmark_speed">%1$.1f tok/s</string>

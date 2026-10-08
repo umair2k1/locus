@@ -162,6 +162,20 @@ class DefaultModelManagerRepository
             return deleted
         }
 
+        override suspend fun importModel(
+            filename: String,
+            sourceBytes: ByteArray,
+        ): Result<DownloadedModel> =
+            runCatching {
+                val file = modelDownloader.importModelFile(filename, sourceBytes)
+                DownloadedModel(
+                    filename = file.name,
+                    sizeBytes = file.length(),
+                    path = file.absolutePath,
+                    lastModified = file.lastModified(),
+                )
+            }
+
         override suspend fun getStorageStats(): ModelStorageStats = modelDownloader.getStorageStats()
 
         override fun observeAllModelMeta(): Flow<List<ModelMeta>> {

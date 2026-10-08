@@ -78,6 +78,9 @@ class HistoryViewModel
             onRestored: () -> Unit = {},
         ) {
             viewModelScope.launch {
+                if (revision.title.isNotBlank()) {
+                    repo.setTitle(noteId, revision.title)
+                }
                 repo.edit(noteId, revision.body)
                 repo.forceFlush(noteId, FlushTrigger.EDITOR_CLOSE)
                 onRestored()

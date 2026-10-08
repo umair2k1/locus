@@ -73,7 +73,7 @@ class DefaultModelRegistry
 
         private val refreshTrigger = MutableStateFlow(0L)
 
-        fun refresh() {
+        override fun refresh() {
             refreshTrigger.update { it + 1 }
         }
 

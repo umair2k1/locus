@@ -15,7 +15,11 @@
  */
 
 package com.locus.app.ui.chat
-
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,14 +27,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +74,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -111,7 +125,37 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val noteCreatedTemplate = stringResource(R.string.chat_pinned_success)
     val openLabel = stringResource(R.string.chat_view_note)
-
+    val context = LocalContext.current
+    val modelPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri != null) {
+                scope.launch {
+                    val filename = resolveUriFileName(context, uri) ?: "imported-model.gguf"
+                    val bytes =
+                        runCatching {
+                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        }.getOrNull()
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.model_picker_loading_model, filename),
+                        )
+                        viewModel.importAndSelectOfflineModel(filename, bytes) { success, resultName ->
+                            scope.launch {
+                                val msg =
+                                    if (success) {
+                                        context.getString(R.string.model_picker_loaded_success, resultName)
+                                    } else {
+                                        context.getString(R.string.model_picker_loaded_failure, resultName)
+                                    }
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        }
+                    } else {
+                        snackbarHostState.showSnackbar("Unable to read model file")
+                    }
+                }
+            }
+        }
     val activeSessionName =
         uiState.sessions.firstOrNull { it.id == uiState.activeSessionId }?.name
             ?: stringResource(R.string.chat_title)
@@ -240,6 +284,9 @@ fun ChatScreen(
                 showModelPicker = false
             },
             entries = uiState.availableModels,
+            onLoadOfflineModelClick = {
+                modelPickerLauncher.launch(arrayOf("*/*"))
+            },
             selectedModelRef =
                 ModelRef(
                     id = uiState.activeModel.name,
@@ -248,6 +295,23 @@ fun ChatScreen(
                 ),
         )
     }
+}
+
+private fun resolveUriFileName(
+    context: Context,
+    uri: Uri,
+): String? {
+    if (uri.scheme == "content") {
+        runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) {
+                    return cursor.getString(nameIndex)
+                }
+            }
+        }
+    }
+    return uri.lastPathSegment?.substringAfterLast('/')
 }
 
 private data class ChatTopBarActions(
@@ -361,20 +425,22 @@ private fun MessageList(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val imeInsets = WindowInsets.ime
+    val density = LocalDensity.current
+    val imeBottom = imeInsets.getBottom(density)
 
-    LaunchedEffect(messages.size, streamingText) {
+    LaunchedEffect(messages.size, streamingText, imeBottom) {
         val totalCount = messages.size + if (streamingText != null) 1 else 0
         if (totalCount > 0) {
             listState.animateScrollToItem(totalCount - 1)
         }
     }
-
     if (messages.isEmpty() && streamingText == null) {
         EmptyChatPlaceholder(modifier = modifier)
     } else {
         LazyColumn(
             state = listState,
-            modifier = modifier.padding(horizontal = 8.dp),
+            modifier = modifier.padding(horizontal = 8.dp).verticalScrollbar(listState),
         ) {
             items(messages, key = { it.id }) { message ->
                 when (message.role) {
@@ -672,3 +738,39 @@ private fun TemplatePickerRow(
         }
     }
 }
+
+/**
+ * Renders a subtle vertical scrollbar indicator on the edge of a [LazyColumn].
+ * Automatically fades in when scrolling or content exceeds viewport.
+ */
+private fun Modifier.verticalScrollbar(
+    state: LazyListState,
+    color: Color = Color.Gray.copy(alpha = 0.5f),
+    width: Float = 10f,
+): Modifier =
+    drawWithContent {
+        drawContent()
+        val layoutInfo = state.layoutInfo
+        val totalItemsCount = layoutInfo.totalItemsCount
+        val visibleItemsCount = layoutInfo.visibleItemsInfo.size
+        if (totalItemsCount == 0 || visibleItemsCount >= totalItemsCount) return@drawWithContent
+
+        val viewportHeight = size.height
+        val firstVisibleIndex = state.firstVisibleItemIndex
+        val firstVisibleOffset = state.firstVisibleItemScrollOffset
+
+        val estimatedItemHeight = viewportHeight / visibleItemsCount
+        val totalEstimatedHeight = estimatedItemHeight * totalItemsCount
+        val currentScrollOffset = (firstVisibleIndex * estimatedItemHeight) + firstVisibleOffset
+
+        val thumbHeight = (viewportHeight * (viewportHeight / totalEstimatedHeight)).coerceIn(40f, viewportHeight / 2)
+        val maxScrollOffset = (totalEstimatedHeight - viewportHeight).coerceAtLeast(1f)
+        val thumbY = (currentScrollOffset / maxScrollOffset) * (viewportHeight - thumbHeight)
+
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(size.width - width, thumbY.coerceIn(0f, viewportHeight - thumbHeight)),
+            size = Size(width, thumbHeight),
+            cornerRadius = CornerRadius(width / 2, width / 2),
+        )
+    }

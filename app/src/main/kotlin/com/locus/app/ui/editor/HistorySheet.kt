@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -181,10 +182,24 @@ private fun HistoryContent(
                         .padding(12.dp)
                         .verticalScroll(rememberScrollState()),
             ) {
-                Text(
-                    text = selectedRevision?.body.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Column {
+                    val title = selectedRevision?.title.orEmpty()
+                    if (title.isNotBlank()) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Text(
+                        text = selectedRevision?.body.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
 
@@ -237,13 +252,25 @@ private fun RevisionItem(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val formattedTime = formatTimestamp(revision.timestamp)
-        Text(
-            text = formattedTime,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = contentColor,
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            if (revision.title.isNotBlank()) {
+                Text(
+                    text = revision.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = contentColor,
+                    maxLines = 1,
+                )
+            }
+            val formattedTime = formatTimestamp(revision.timestamp)
+            Text(
+                text = formattedTime,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (isSelected && revision.title.isBlank()) FontWeight.Bold else FontWeight.Normal,
+                color = contentColor.copy(alpha = if (revision.title.isNotBlank()) 0.8f else 1.0f),
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "${revision.body.length} chars",
             style = MaterialTheme.typography.bodySmall,

@@ -26,6 +26,9 @@ private const val MAX_TITLE_LENGTH = 60
 private val HEADER_PREFIX_REGEX = Regex("""^#{1,6}\s+""")
 private val LIST_PREFIX_REGEX = Regex("""^[-*+]\s+(\[[ xX]\]\s*)?""")
 private val NUMBERED_PREFIX_REGEX = Regex("""^\d+\.\s+""")
+private val CHECKBOX_PREFIX_PATTERN = Regex("""^(\s*[-*+]\s+\[[ xX]\]\s*)""")
+private val BULLET_PREFIX_PATTERN = Regex("""^(\s*[-*+]\s+)""")
+private val ORDERED_PREFIX_PATTERN = Regex("""^(\s*(\d+)\.\s+)""")
 
 /** Wraps selection with `**` or inserts `****` at cursor, positioning cursor inside. */
 fun applyBold(value: TextFieldValue): TextFieldValue {
@@ -205,4 +208,98 @@ private fun transformCurrentLine(
         text = newText,
         selection = TextRange(newCursor),
     )
+}
+
+/**
+ * Intercepts [onValueChange] in the note editor to provide Google Keep-style list continuation:
+ * - When Enter is pressed on a line containing a list marker (- [ ] / - [x], - / *, 1.), continues the marker on the next line.
+ * - For checkboxes, always continues as an unchecked box (- [ ] ).
+ * - For ordered lists, increments the number (e.g. 1. -> 2.).
+ * - If Enter is pressed on an empty list item (only marker present), deletes the marker and leaves an empty line (exits the list).
+ */
+fun handleEditorValueChange(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue,
+): TextFieldValue {
+    // Only intercept when exactly one character was typed/inserted and that character is newline
+    if (newValue.text.length != oldValue.text.length + 1) return newValue
+
+    val insertedOffset = oldValue.selection.start
+    if (insertedOffset !in 0 until newValue.text.length) return newValue
+    if (newValue.text[insertedOffset] != '\n') return newValue
+
+    // Find the line preceding the newly inserted newline
+    val prevLineEnd = insertedOffset
+    val prevLineStart = if (prevLineEnd == 0) 0 else (newValue.text.lastIndexOf('\n', prevLineEnd - 1) + 1).coerceAtLeast(0)
+    val prevLine = newValue.text.substring(prevLineStart, prevLineEnd)
+
+    // Check for checkbox: e.g. "  - [ ] ", "  - [x] "
+    val checkboxMatch = CHECKBOX_PREFIX_PATTERN.find(prevLine)
+    if (checkboxMatch != null) {
+        val fullPrefix = checkboxMatch.value
+        val content = prevLine.substring(fullPrefix.length)
+        return if (content.isBlank()) {
+            // Empty checkbox item: remove checkbox prefix, leaving a blank line (exit list)
+            val textBefore = newValue.text.substring(0, prevLineStart)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + textAfter
+            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
+        } else {
+            // Non-empty checkbox: continue as unchecked box "- [ ] " with same indent
+            val indent = fullPrefix.takeWhile { it.isWhitespace() }
+            val nextPrefix = "$indent- [ ] "
+            val textBefore = newValue.text.substring(0, insertedOffset + 1)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + nextPrefix + textAfter
+            val newCursor = insertedOffset + 1 + nextPrefix.length
+            TextFieldValue(text = newText, selection = TextRange(newCursor))
+        }
+    }
+
+    // Check for ordered list: e.g. "  1. "
+    val orderedMatch = ORDERED_PREFIX_PATTERN.find(prevLine)
+    if (orderedMatch != null) {
+        val fullPrefix = orderedMatch.value
+        val num = orderedMatch.groupValues[2].toLongOrNull() ?: 1L
+        val content = prevLine.substring(fullPrefix.length)
+        return if (content.isBlank()) {
+            // Empty ordered item: exit list
+            val textBefore = newValue.text.substring(0, prevLineStart)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + textAfter
+            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
+        } else {
+            // Increment number
+            val indent = fullPrefix.takeWhile { it.isWhitespace() }
+            val nextPrefix = "$indent${num + 1}. "
+            val textBefore = newValue.text.substring(0, insertedOffset + 1)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + nextPrefix + textAfter
+            val newCursor = insertedOffset + 1 + nextPrefix.length
+            TextFieldValue(text = newText, selection = TextRange(newCursor))
+        }
+    }
+
+    // Check for unordered bullet: e.g. "  - ", "  * ", "  + "
+    val bulletMatch = BULLET_PREFIX_PATTERN.find(prevLine)
+    if (bulletMatch != null) {
+        val fullPrefix = bulletMatch.value
+        val content = prevLine.substring(fullPrefix.length)
+        return if (content.isBlank()) {
+            // Empty bullet item: exit list
+            val textBefore = newValue.text.substring(0, prevLineStart)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + textAfter
+            TextFieldValue(text = newText, selection = TextRange(prevLineStart))
+        } else {
+            // Continue bullet with same symbol and indent
+            val textBefore = newValue.text.substring(0, insertedOffset + 1)
+            val textAfter = newValue.text.substring(insertedOffset + 1)
+            val newText = textBefore + fullPrefix + textAfter
+            val newCursor = insertedOffset + 1 + fullPrefix.length
+            TextFieldValue(text = newText, selection = TextRange(newCursor))
+        }
+    }
+
+    return newValue
 }

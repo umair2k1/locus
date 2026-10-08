@@ -22,4 +22,6 @@ interface ModelRegistry {
     fun observeModels(): Flow<List<RegistryEntry>>
 
     suspend fun getModels(): List<RegistryEntry>
+
+    fun refresh() {}
 }

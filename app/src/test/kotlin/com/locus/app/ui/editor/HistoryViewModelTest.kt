@@ -100,10 +100,10 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun restoreRevision_callsRepoEditAndForceFlush() =
+    fun restoreRevision_callsRepoEditAndForceFlush_andSetsTitleWhenPresent() =
         runTest {
             val noteId = "note-to-restore"
-            val revisionToRestore = HistoryRevision(timestamp = 1500L, body = "Restored content")
+            val revisionToRestore = HistoryRevision(timestamp = 1500L, body = "Restored content", title = "Restored Title")
             var restoredCallbackInvoked = false
 
             viewModel.restoreRevision(noteId, revisionToRestore) { restoredCallbackInvoked = true }
@@ -112,6 +112,7 @@ class HistoryViewModelTest {
             assertTrue(restoredCallbackInvoked)
             assertEquals(noteId, fakeRepo.lastEditedNoteId)
             assertEquals("Restored content", fakeRepo.lastEditedBody)
+            assertEquals("Restored Title", fakeRepo.lastSetTitle)
             assertEquals(noteId, fakeRepo.lastFlushedNoteId)
             assertEquals(FlushTrigger.EDITOR_CLOSE, fakeRepo.lastFlushTrigger)
         }
@@ -120,6 +121,7 @@ class HistoryViewModelTest {
         val revisionsMap = mutableMapOf<String, List<HistoryRevision>>()
         var lastEditedNoteId: String? = null
         var lastEditedBody: String? = null
+        var lastSetTitle: String? = null
         var lastFlushedNoteId: String? = null
         var lastFlushTrigger: FlushTrigger? = null
 
@@ -131,6 +133,13 @@ class HistoryViewModelTest {
         ) {
             lastEditedNoteId = noteId
             lastEditedBody = newBody
+        }
+
+        override suspend fun setTitle(
+            noteId: String,
+            title: String,
+        ) {
+            lastSetTitle = title
         }
 
         override suspend fun forceFlush(

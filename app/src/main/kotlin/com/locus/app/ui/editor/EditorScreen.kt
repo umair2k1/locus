@@ -245,8 +245,9 @@ private fun EditorContent(
                     },
                     textFieldValue = textFieldValue,
                     onValueChange = { newValue ->
-                        textFieldValue = newValue
-                        actions.onBodyChange(newValue.text)
+                        val handledValue = handleEditorValueChange(oldValue = textFieldValue, newValue = newValue)
+                        textFieldValue = handledValue
+                        actions.onBodyChange(handledValue.text)
                     },
                     actions = actions,
                     relatedNotes = relatedNotes,
