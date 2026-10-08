@@ -8,6 +8,7 @@ import com.locus.core.data.backup.BackupPreferencesStore
 import com.locus.core.data.backup.SafImportExportRepository
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.RoomChatRepository
+import com.locus.core.data.dashboard.ActionItemDao
 import com.locus.core.data.dashboard.ClusterDao
 import com.locus.core.data.dashboard.DigestDao
 import com.locus.core.data.db.LocusDatabase
@@ -147,6 +148,7 @@ abstract class DataModule {
                     LocusDatabase.MIGRATION_7_8,
                     LocusDatabase.MIGRATION_8_9,
                     LocusDatabase.MIGRATION_9_10,
+                    LocusDatabase.MIGRATION_10_11,
                 ).build()
 
         @Provides fun provideNoteDao(database: LocusDatabase): NoteDao = database.noteDao()
@@ -171,5 +173,7 @@ abstract class DataModule {
         @Provides fun provideDigestDao(database: LocusDatabase): DigestDao = database.digestDao()
 
         @Provides fun provideClusterDao(database: LocusDatabase): ClusterDao = database.clusterDao()
+
+        @Provides fun provideActionItemDao(database: LocusDatabase): ActionItemDao = database.actionItemDao()
     }
 }

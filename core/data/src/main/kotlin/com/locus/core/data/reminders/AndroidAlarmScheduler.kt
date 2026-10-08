@@ -75,6 +75,9 @@ open class AndroidAlarmScheduler
             reminderDao.deactivate(reminderId)
         }
 
+        override suspend fun getExistingReminderIdsForNote(noteId: String): Set<String> =
+            reminderDao.getRemindersByNoteId(noteId).map { it.id }.toSet()
+
         private fun determineEffectiveTier(
             requestedTier: SchedulingTier,
             alarmManager: AlarmManager?,

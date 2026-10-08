@@ -13,4 +13,6 @@ interface AlarmScheduler {
     )
 
     suspend fun cancel(reminderId: String)
+
+    suspend fun getExistingReminderIdsForNote(noteId: String): Set<String> = emptySet()
 }

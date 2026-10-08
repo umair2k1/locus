@@ -12,6 +12,9 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE id = :id")
     suspend fun getById(id: String): ReminderEntity?
 
+    @Query("SELECT * FROM reminders WHERE noteId = :noteId")
+    suspend fun getRemindersByNoteId(noteId: String): List<ReminderEntity>
+
     @Query("SELECT * FROM reminders WHERE active = 1")
     suspend fun getActiveReminders(): List<ReminderEntity>
 

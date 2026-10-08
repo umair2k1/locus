@@ -20,6 +20,8 @@ import com.locus.core.domain.chat.ChatModelClient
 import com.locus.core.domain.chat.RagAnswerUseCase
 import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
+import com.locus.core.domain.dashboard.ExtractActionItemsUseCase
+import com.locus.core.domain.dashboard.ParseRemindersUseCase
 import com.locus.core.domain.models.DeviceCapabilitiesGateway
 import com.locus.core.domain.models.ModelManagerRepository
 import com.locus.core.domain.models.ModelRegistry
@@ -27,6 +29,7 @@ import com.locus.core.domain.notes.InlineAiUseCase
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.SuggestTagsUseCase
 import com.locus.core.domain.providers.ProviderAdapter
+import com.locus.core.domain.reminders.AlarmScheduler
 import com.locus.core.domain.search.ChunkRepository
 import com.locus.core.domain.search.EmbeddingGateway
 import com.locus.core.domain.search.HybridSearchUseCase
@@ -207,6 +210,32 @@ abstract class AiModule {
                 chunkRepository = chunkRepository,
                 noteRepository = noteRepository,
                 chatModelClient = providerAdapter,
+                clock = clock,
+            )
+
+        @Provides
+        @Singleton
+        fun provideExtractActionItemsUseCase(
+            noteRepository: NoteRepository,
+            providerAdapter: ProviderAdapter,
+            clock: Clock,
+        ): ExtractActionItemsUseCase =
+            ExtractActionItemsUseCase(
+                noteRepository = noteRepository,
+                chatModelClient = providerAdapter,
+                clock = clock,
+            )
+
+        @Provides
+        @Singleton
+        fun provideParseRemindersUseCase(
+            noteRepository: NoteRepository,
+            alarmScheduler: AlarmScheduler,
+            clock: Clock,
+        ): ParseRemindersUseCase =
+            ParseRemindersUseCase(
+                noteRepository = noteRepository,
+                alarmScheduler = alarmScheduler,
                 clock = clock,
             )
     }

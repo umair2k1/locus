@@ -24,3 +24,11 @@
 
 ## D-10: Topic clustering k-selection heuristic (D-1, D-6)
 To satisfy Prompt 69's requirement for deterministic topic clustering over note embedding centroids, k-means is used with initial centroids deterministically spaced across sorted note IDs. The number of clusters $k$ is calculated as $k = \operatorname{round}(\sqrt{\text{noteCount} / 2})$, clamped to $[1, \min(\text{noteCount}, 10)]$. For note counts $\le 2$, $k = \text{noteCount}$. Each cluster is labeled via a routed LLM task adhering to `TaskType.DIGEST_TAGGING_CLUSTER_LABEL` rather than hardcoding a cloud provider.
+
+## D-11: DateTimePhraseParser heuristic scope and limitations (D-1, D-7)
+`DateTimePhraseParser` provides rule-based regex extraction for common date/time expressions ("tomorrow at 3pm", "next <day_of_week> at <time>", "<Month> <Day> [at <time>]") to automatically extract reminders from note content without requiring full NLU or model inference.
+Known limitations:
+1. English only per NF-4.
+2. Supports specific relative and calendar formats; unstructured or complex natural language (e.g. "three weeks from yesterday", "the day after next Tuesday", "in a fortnight") is not parsed.
+3. Ambiguous times without am/pm default to standard business hour 09:00 UTC/local.
+4. Past dates within the current calendar year wrap to the subsequent year.

@@ -10,6 +10,8 @@ import com.locus.core.data.settings.DashboardSettingsStore
 import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
 import com.locus.core.domain.dashboard.DigestPeriod
+import com.locus.core.domain.dashboard.ExtractActionItemsUseCase
+import com.locus.core.domain.dashboard.ParseRemindersUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -36,6 +38,9 @@ class DashboardWorker
         private val computeDigestUseCase: ComputeDigestUseCase? = null,
         private val clusterDao: ClusterDao? = null,
         private val computeClustersUseCase: ComputeClustersUseCase? = null,
+        private val actionItemDao: ActionItemDao? = null,
+        private val extractActionItemsUseCase: ExtractActionItemsUseCase? = null,
+        private val parseRemindersUseCase: ParseRemindersUseCase? = null,
     ) : CoroutineWorker(appContext, params) {
         var subJobRunner: DashboardSubJobRunner? = null
 
@@ -57,9 +62,19 @@ class DashboardWorker
                 subJobRunner?.runClusters()
             }
             if (settings.isActionItemsEnabled) {
+                val card = extractActionItemsUseCase?.execute()
+                if (card != null && actionItemDao != null) {
+                    actionItemDao.deleteAll()
+                    val entities =
+                        card.items.map {
+                            ActionItemEntity.fromDomain(it, card.id, card.computedAt.toEpochMilli())
+                        }
+                    actionItemDao.insertAll(entities)
+                }
                 subJobRunner?.runActionItems()
             }
             if (settings.isRemindersEnabled) {
+                parseRemindersUseCase?.execute()
                 subJobRunner?.runReminders()
             }
             return Result.success()

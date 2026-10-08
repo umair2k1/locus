@@ -10,6 +10,8 @@ import com.locus.core.data.audit.AuditEntryEntity
 import com.locus.core.data.chat.ChatDao
 import com.locus.core.data.chat.ChatMessageEntity
 import com.locus.core.data.chat.ChatSessionEntity
+import com.locus.core.data.dashboard.ActionItemDao
+import com.locus.core.data.dashboard.ActionItemEntity
 import com.locus.core.data.dashboard.ClusterDao
 import com.locus.core.data.dashboard.ClusterEntity
 import com.locus.core.data.dashboard.DigestDao
@@ -41,8 +43,9 @@ import com.locus.core.data.vector.EmbeddingConverters
             PromptTemplateEntity::class,
             DigestEntity::class,
             ClusterEntity::class,
+            ActionItemEntity::class,
         ],
-    version = 10,
+    version = 11,
 )
 @TypeConverters(Converters::class, EmbeddingConverters::class)
 abstract class LocusDatabase : RoomDatabase() {
@@ -66,6 +69,8 @@ abstract class LocusDatabase : RoomDatabase() {
 
     abstract fun clusterDao(): ClusterDao
 
+    abstract fun actionItemDao(): ActionItemDao
+
     companion object {
         private const val VERSION_1 = 1
         private const val VERSION_2 = 2
@@ -77,6 +82,7 @@ abstract class LocusDatabase : RoomDatabase() {
         private const val VERSION_8 = 8
         private const val VERSION_9 = 9
         private const val VERSION_10 = 10
+        private const val VERSION_11 = 11
         val MIGRATION_1_2 =
             object : Migration(VERSION_1, VERSION_2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -278,6 +284,31 @@ abstract class LocusDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_clusters_computedAt` ON `clusters` (`computedAt`)",
+                    )
+                }
+            }
+
+        val MIGRATION_10_11 =
+            object : Migration(VERSION_10, VERSION_11) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `action_items` (
+                            `id` TEXT NOT NULL,
+                            `cardId` TEXT NOT NULL,
+                            `noteId` TEXT NOT NULL,
+                            `noteTitle` TEXT NOT NULL,
+                            `task` TEXT NOT NULL,
+                            `computedAt` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_action_items_computedAt` ON `action_items` (`computedAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_action_items_noteId` ON `action_items` (`noteId`)",
                     )
                 }
             }
