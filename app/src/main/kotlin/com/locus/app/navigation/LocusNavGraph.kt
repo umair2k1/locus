@@ -34,6 +34,7 @@ import com.locus.app.ui.grid.GridScreen
 import com.locus.app.ui.models.ModelManagerScreen
 import com.locus.app.ui.search.SearchScreen
 import com.locus.app.ui.settings.DashboardSettingsScreen
+import com.locus.app.ui.settings.KeepImportScreen
 import com.locus.app.ui.settings.PromptTemplatesScreen
 import com.locus.app.ui.settings.SettingsScreen
 import com.locus.app.ui.settings.UsageSummaryScreen
@@ -161,6 +162,14 @@ private fun NavGraphBuilder.locusNavGraph(navController: NavHostController) {
             onNavigateToDashboardSettings = {
                 navController.navigate(LocusDestinations.DASHBOARD_SETTINGS_ROUTE)
             },
+            onNavigateToKeepImport = {
+                navController.navigate(LocusDestinations.KEEP_IMPORT_ROUTE)
+            },
+        )
+    }
+    composable(LocusDestinations.KEEP_IMPORT_ROUTE) {
+        KeepImportScreen(
+            onNavigateBack = { navController.popBackStack() },
         )
     }
     composable(

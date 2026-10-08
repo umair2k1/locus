@@ -1,0 +1,10 @@
+{
+  "color": "DEFAULT",
+  "isTrashed": false,
+  "isPinned": false,
+  "isArchived": false,
+  "textContent": "Remember to review the architecture documentation before Friday.",
+  "title": "Architecture Review",
+  "userEditedTimestampUsec": 1728374400000000,
+  "createdTimestampUsec": 1728370800000000
+}

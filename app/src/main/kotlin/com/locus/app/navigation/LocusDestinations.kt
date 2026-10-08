@@ -15,6 +15,7 @@ object LocusDestinations {
     const val USAGE_SUMMARY_ROUTE = "usage_summary"
     const val AUDIT_JOURNAL_ROUTE = "audit_journal"
     const val PROMPT_TEMPLATES_ROUTE = "prompt_templates"
+    const val KEEP_IMPORT_ROUTE = "keep_import"
     const val NOTE_ID_ARG = "noteId"
 
     fun editorRoute(noteId: String): String = "editor/$noteId"

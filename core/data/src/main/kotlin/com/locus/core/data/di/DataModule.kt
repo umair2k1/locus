@@ -19,6 +19,7 @@ import com.locus.core.data.files.DataStoreTreeUriStore
 import com.locus.core.data.files.SafNoteFileSource
 import com.locus.core.data.files.SafNoteRepository
 import com.locus.core.data.files.TreeUriStore
+import com.locus.core.data.keep.KeepImportUseCase
 import com.locus.core.data.models.ModelMetaDao
 import com.locus.core.data.models.RoomModelMetaRepository
 import com.locus.core.data.reminders.AndroidAlarmScheduler
@@ -36,6 +37,7 @@ import com.locus.core.domain.backup.BackupSettingsRepository
 import com.locus.core.domain.backup.ImportExportRepository
 import com.locus.core.domain.chat.ChatRepository
 import com.locus.core.domain.dashboard.DashboardRepository
+import com.locus.core.domain.keep.KeepImportRepository
 import com.locus.core.domain.models.ModelMetaRepository
 import com.locus.core.domain.notes.FrontmatterParser
 import com.locus.core.domain.notes.NoteRepository
@@ -57,6 +59,7 @@ import com.locus.core.domain.usage.PriceTableStore as DomainPriceTableStore
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 abstract class DataModule {
     @Binds @Singleton
     abstract fun bindNoteRepository(impl: SafNoteRepository): NoteRepository
@@ -127,6 +130,9 @@ abstract class DataModule {
 
     @Binds @Singleton
     abstract fun bindDashboardRepository(impl: RoomDashboardRepository): DashboardRepository
+
+    @Binds @Singleton
+    abstract fun bindKeepImportRepository(impl: KeepImportUseCase): KeepImportRepository
 
     companion object {
         @Provides

@@ -1,0 +1,18 @@
+{
+  "color": "YELLOW",
+  "isTrashed": false,
+  "isPinned": true,
+  "isArchived": false,
+  "textContent": "Q3 Planning kickoff meeting notes and roadmap targets.",
+  "title": "Q3 Planning",
+  "labels": [
+    {
+      "name": "work"
+    },
+    {
+      "name": "planning"
+    }
+  ],
+  "userEditedTimestampUsec": 1728374400000000,
+  "createdTimestampUsec": 1728370800000000
+}

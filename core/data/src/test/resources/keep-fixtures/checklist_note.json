@@ -1,0 +1,23 @@
+{
+  "color": "DEFAULT",
+  "isTrashed": false,
+  "isPinned": false,
+  "isArchived": false,
+  "listContent": [
+    {
+      "text": "Apples",
+      "isChecked": true
+    },
+    {
+      "text": "Milk",
+      "isChecked": false
+    },
+    {
+      "text": "Bread",
+      "isChecked": false
+    }
+  ],
+  "title": "Grocery List",
+  "userEditedTimestampUsec": 1728374400000000,
+  "createdTimestampUsec": 1728370800000000
+}

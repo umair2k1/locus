@@ -55,6 +55,7 @@ private data class ImportExportActions(
     val onImportLibrary: () -> Unit,
     val onExportSettings: () -> Unit,
     val onImportSettings: () -> Unit,
+    val onImportKeep: () -> Unit = {},
 )
 
 private data class BackupUiState(
@@ -73,6 +74,7 @@ fun SettingsScreen(
     onNavigateToAuditJournal: () -> Unit = {},
     onNavigateToPromptTemplates: () -> Unit = {},
     onNavigateToDashboardSettings: () -> Unit = {},
+    onNavigateToKeepImport: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -200,6 +202,7 @@ fun SettingsScreen(
                                 arrayOf("application/json", "text/plain", "*/*"),
                             )
                         },
+                        onImportKeep = onNavigateToKeepImport,
                     ),
             )
             Button(onClick = onNavigateToDashboardSettings) { Text(stringResource(R.string.dashboard_settings_title)) }
@@ -458,6 +461,9 @@ private fun ImportExportCard(
                 }
             }
 
+            OutlinedButton(onClick = actions.onImportKeep, modifier = Modifier.fillMaxWidth()) {
+                Text("Import Google Keep (Takeout)")
+            }
             HorizontalDivider()
 
             Text(

@@ -5,8 +5,8 @@ import androidx.work.ListenableWorker
 import androidx.work.NetworkType
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
-import com.locus.core.domain.dashboard.DashboardSettings
 import com.locus.core.data.settings.DashboardSettingsStore
+import com.locus.core.domain.dashboard.DashboardSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
