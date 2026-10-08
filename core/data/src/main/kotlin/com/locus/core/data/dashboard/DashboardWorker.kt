@@ -1,6 +1,10 @@
 package com.locus.core.data.dashboard
 
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -10,6 +14,7 @@ import com.locus.core.data.settings.DashboardSettingsStore
 import com.locus.core.domain.dashboard.ComputeClustersUseCase
 import com.locus.core.domain.dashboard.ComputeDigestUseCase
 import com.locus.core.domain.dashboard.DashboardSettings
+import com.locus.core.domain.dashboard.DigestCard
 import com.locus.core.domain.dashboard.DigestPeriod
 import com.locus.core.domain.dashboard.ExtractActionItemsUseCase
 import com.locus.core.domain.dashboard.ParseRemindersUseCase
@@ -65,8 +70,11 @@ class DashboardWorker
             if ((targetSubJob == SUB_JOB_ALL || targetSubJob == SUB_JOB_DIGEST) && settings.isDigestEnabled) {
                 android.util.Log.d(TAG, "Recomputing Digest")
                 val digest = computeDigestUseCase?.execute(DigestPeriod.DAILY)
-                if (digest != null && digestDao != null) {
-                    digestDao.insert(DigestEntity.fromDomain(digest))
+                if (digest != null) {
+                    if (digestDao != null) {
+                        digestDao.insert(DigestEntity.fromDomain(digest))
+                    }
+                    postDigestNotification(digest)
                 }
                 subJobRunner?.runDigest()
             }
@@ -118,6 +126,45 @@ class DashboardWorker
             }
         }
 
+        private fun postDigestNotification(digest: DigestCard) {
+            val notificationManager =
+                applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                    ?: return
+
+            val launchIntent =
+                applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+            val intent =
+                launchIntent?.apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("nav_route", "dashboard")
+                } ?: Intent()
+
+            val pendingIntent =
+                PendingIntent.getActivity(
+                    applicationContext,
+                    DIGEST_NOTIFICATION_ID,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+
+            val title = "Daily Digest Available"
+            val text = digest.overallSummary
+
+            val notification =
+                NotificationCompat
+                    .Builder(applicationContext, CHANNEL_DIGEST)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(title)
+                    .setContentText(text)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+
+            notificationManager.notify(DIGEST_NOTIFICATION_ID, notification)
+        }
+
         companion object {
             private const val TAG = "DashboardWorker"
             const val KEY_SUB_JOB = "sub_job"
@@ -126,6 +173,8 @@ class DashboardWorker
             const val SUB_JOB_CLUSTERS = "CLUSTERS"
             const val SUB_JOB_ACTION_ITEMS = "ACTION_ITEMS"
             const val SUB_JOB_REMINDERS = "REMINDERS"
+            const val CHANNEL_DIGEST = "digest"
+            const val DIGEST_NOTIFICATION_ID = 4001
 
             fun buildConstraints(constrained: Boolean): Constraints =
                 if (constrained) {

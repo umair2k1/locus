@@ -3,6 +3,7 @@ package com.locus.app
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.locus.app.notifications.DigestChannel
 import com.locus.app.notifications.ReminderChannels
 import com.locus.app.workers.WorkScheduling
 import com.locus.core.ai.catalog.CatalogRepository
@@ -35,6 +36,7 @@ class LocusApplication :
     override fun onCreate() {
         super.onCreate()
         ReminderChannels.createAll(this)
+        DigestChannel.create(this)
         CoroutineScope(SupervisorJob() + dispatchers.default).launch {
             val interval = backupSettingsRepository.getBackupInterval()
             WorkScheduling.schedulePeriodicBackup(this@LocusApplication, interval)
