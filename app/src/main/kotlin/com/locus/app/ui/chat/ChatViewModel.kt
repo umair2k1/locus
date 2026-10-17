@@ -78,14 +78,20 @@ data class ChatUiState(
     val availableModels: List<RegistryEntry> = emptyList(),
     val showThermalWarning: Boolean = false,
     val isCloudDisabled: Boolean = false,
+    val isReloadingModel: Boolean = false,
+    val isLocalModelLoaded: Boolean = false,
 )
 
 sealed interface ChatEffect {
     data object ThermalThrottlingWarning : ChatEffect
+
+    data class ShowSnackbar(
+        val message: String,
+    ) : ChatEffect
 }
 
 @HiltViewModel
-@Suppress("LongParameterList", "TooManyFunctions")
+@Suppress("LongParameterList", "TooManyFunctions", "LargeClass")
 class ChatViewModel
     @Inject
     constructor(
@@ -139,6 +145,7 @@ class ChatViewModel
         private var generationJob: Job? = null
 
         init {
+            modelRegistry?.refresh()
             observeSessions()
             observeActiveModel()
             observeModelRegistry()
@@ -172,12 +179,29 @@ class ChatViewModel
         private fun observeActiveModel() {
             viewModelScope.launch(dispatchers.io) {
                 activeModelRepository.observeActiveModel().collectLatest { modelInfo ->
-                    _uiState.update { it.copy(activeModel = modelInfo) }
+                    if (_uiState.value.isCloudDisabled &&
+                        modelInfo.tier == com.locus.core.domain.chat.ModelTier.CLOUD
+                    ) {
+                        enforceLocalModelSelection()
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                activeModel = modelInfo,
+                                isLocalModelLoaded = modelManagerRepository?.isChatModelLoaded() == true,
+                            )
+                        }
+                    }
                 }
             }
         }
 
         fun selectActiveModel(model: com.locus.core.domain.chat.ActiveModelInfo) {
+            if (_uiState.value.isCloudDisabled &&
+                model.tier == com.locus.core.domain.chat.ModelTier.CLOUD
+            ) {
+                return
+            }
+            _uiState.update { it.copy(activeModel = model) }
             viewModelScope.launch(dispatchers.io) { activeModelRepository.setActiveModel(model) }
         }
 
@@ -186,9 +210,28 @@ class ChatViewModel
                 viewModelScope.launch(dispatchers.io) {
                     registry.observeModels().collectLatest { models ->
                         _uiState.update { it.copy(availableModels = models) }
+                        val currentModel = _uiState.value.activeModel
+                        val needsRealLocalModel =
+                            _uiState.value.isCloudDisabled ||
+                                (currentModel.isLocal && currentModel.name == "Local Model")
+                        if (needsRealLocalModel) {
+                            val bestLocal = findBestLocalEntry(models)
+                            if (bestLocal != null && currentModel.name != bestLocal.ref.id) {
+                                selectModel(bestLocal)
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        private fun findBestLocalEntry(models: List<RegistryEntry>): RegistryEntry? {
+            val localEntries =
+                models.filter {
+                    it.isOffline || it.ref.tier == com.locus.core.domain.routing.ModelTier.LOCAL
+                }
+            return localEntries.firstOrNull { !it.ref.id.contains("embedding", ignoreCase = true) }
+                ?: localEntries.firstOrNull()
         }
 
         private fun observeThermalStatus() {
@@ -213,23 +256,41 @@ class ChatViewModel
             viewModelScope.launch(dispatchers.io) {
                 store.isCloudDisabled.collectLatest { isCloudDisabled ->
                     _uiState.update { it.copy(isCloudDisabled = isCloudDisabled) }
-                    val isCloudActive =
-                        _uiState.value.activeModel.tier == com.locus.core.domain.chat.ModelTier.CLOUD
-                    if (isCloudDisabled && isCloudActive) {
-                        val localFallback =
-                            _uiState.value.availableModels.firstOrNull {
-                                it.isOffline || it.ref.tier == com.locus.core.domain.routing.ModelTier.LOCAL
-                            }
-                        if (localFallback != null) {
-                            selectModel(localFallback)
-                        } else {
-                            val defaultLocal =
-                                com.locus.core.domain.chat.ActiveModelInfo(
-                                    name = "Local Model",
-                                    tier = com.locus.core.domain.chat.ModelTier.LOCAL,
-                                )
-                            _uiState.update { it.copy(activeModel = defaultLocal) }
-                        }
+                    if (isCloudDisabled) {
+                        enforceLocalModelSelection()
+                    }
+                }
+            }
+        }
+
+        private suspend fun enforceLocalModelSelection() {
+            val localFallback = findBestLocalEntry(_uiState.value.availableModels)
+            if (localFallback != null) {
+                selectModel(localFallback)
+            } else {
+                val downloaded =
+                    runCatching { modelManagerRepository?.getDownloadedModels().orEmpty() }
+                        .getOrDefault(emptyList())
+                val downloadedChat =
+                    downloaded.firstOrNull { !it.filename.contains("embedding", ignoreCase = true) }
+                        ?: downloaded.firstOrNull()
+                val localName =
+                    downloadedChat?.filename
+                        ?: _uiState.value.activeModel
+                            .takeIf { it.isLocal }
+                            ?.name
+                        ?: "Local Model"
+                val defaultLocal =
+                    com.locus.core.domain.chat.ActiveModelInfo(
+                        name = localName,
+                        tier = com.locus.core.domain.chat.ModelTier.LOCAL,
+                    )
+                _uiState.update { it.copy(activeModel = defaultLocal) }
+                activeModelRepository.setActiveModel(defaultLocal)
+                if (downloadedChat != null) {
+                    val reloadRes = modelManagerRepository?.reloadChatModel(downloadedChat.filename)
+                    _uiState.update {
+                        it.copy(isLocalModelLoaded = reloadRes?.isSuccess == true)
                     }
                 }
             }
@@ -253,6 +314,86 @@ class ChatViewModel
                     contextLength = entry.contextLength,
                 )
             _uiState.update { it.copy(activeModel = modelInfo) }
+            viewModelScope.launch(dispatchers.io) {
+                activeModelRepository.setActiveModel(modelInfo)
+                if (entry.isOffline || entry.ref.tier == com.locus.core.domain.routing.ModelTier.LOCAL) {
+                    val loadRes = modelManagerRepository?.reloadChatModel(entry.ref.id)
+                    _uiState.update {
+                        it.copy(isLocalModelLoaded = loadRes?.isSuccess == true)
+                    }
+                }
+            }
+        }
+
+        fun reloadLocalModel(onResult: ((Boolean, String) -> Unit)? = null) {
+            if (_uiState.value.isReloadingModel) return
+            viewModelScope.launch(dispatchers.io) {
+                _uiState.update { it.copy(isReloadingModel = true) }
+                modelRegistry?.refresh()
+                val repo = modelManagerRepository
+                if (repo == null) {
+                    _uiState.update { it.copy(isReloadingModel = false) }
+                    val msg = "Model manager not available"
+                    _effects.trySend(ChatEffect.ShowSnackbar(msg))
+                    withContext(dispatchers.main) { onResult?.invoke(false, msg) }
+                    return@launch
+                }
+
+                val currentActive = _uiState.value.activeModel
+                val requestedId =
+                    if (currentActive.isLocal && currentActive.name != "Local Model") {
+                        currentActive.name
+                    } else {
+                        findBestLocalEntry(_uiState.value.availableModels)?.ref?.id
+                    }
+
+                val reloadResult = repo.reloadChatModel(requestedId)
+                reloadResult.fold(
+                    onSuccess = { loadedFilename ->
+                        val localRef =
+                            ModelRef(
+                                id = loadedFilename,
+                                tier = com.locus.core.domain.routing.ModelTier.LOCAL,
+                                providerId = null,
+                            )
+                        val sessionId = _uiState.value.activeSessionId ?: "default"
+                        sessionModelOverrides[sessionId] = localRef
+                        sessionConfirmedModels[sessionId] = localRef
+                        val matchedEntry =
+                            _uiState.value.availableModels.find {
+                                it.ref.id.equals(loadedFilename, ignoreCase = true)
+                            }
+                        val modelInfo =
+                            com.locus.core.domain.chat.ActiveModelInfo(
+                                name = loadedFilename,
+                                tier = com.locus.core.domain.chat.ModelTier.LOCAL,
+                                contextLength = matchedEntry?.contextLength ?: 8192,
+                            )
+                        activeModelRepository.setActiveModel(modelInfo)
+                        _uiState.update {
+                            it.copy(
+                                activeModel = modelInfo,
+                                isReloadingModel = false,
+                                isLocalModelLoaded = true,
+                            )
+                        }
+                        val msg = "Loaded $loadedFilename into memory"
+                        _effects.trySend(ChatEffect.ShowSnackbar(msg))
+                        withContext(dispatchers.main) { onResult?.invoke(true, loadedFilename) }
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(
+                                isReloadingModel = false,
+                                isLocalModelLoaded = false,
+                            )
+                        }
+                        val msg = error.message ?: "Failed to reload local model"
+                        _effects.trySend(ChatEffect.ShowSnackbar(msg))
+                        withContext(dispatchers.main) { onResult?.invoke(false, msg) }
+                    },
+                )
+            }
         }
 
         fun importAndSelectOfflineModel(
@@ -267,35 +408,63 @@ class ChatViewModel
                     return@launch
                 }
                 val result = repo.importModel(filename, bytes)
-                result.fold(
-                    onSuccess = { downloaded ->
-                        modelRegistry?.refresh()
-                        val localRef =
-                            ModelRef(
-                                id = downloaded.filename,
-                                tier = com.locus.core.domain.routing.ModelTier.LOCAL,
-                                providerId = null,
-                            )
-                        val entry =
-                            RegistryEntry(
-                                ref = localRef,
-                                contextLength = 4096,
-                                capabilities = null,
-                                isOffline = true,
-                                benchmarkedTokPerSecond = null,
-                            )
-                        withContext(dispatchers.main) {
-                            selectModel(entry)
-                            onResult(true, downloaded.filename)
-                        }
-                    },
-                    onFailure = { error ->
-                        withContext(dispatchers.main) {
-                            onResult(false, error.message ?: "Failed to import model")
-                        }
-                    },
-                )
+                handleImportedModelResult(result, onResult)
             }
+        }
+
+        fun importAndSelectOfflineModelStream(
+            filename: String,
+            openStream: () -> java.io.InputStream?,
+            onResult: (Boolean, String) -> Unit,
+        ) {
+            viewModelScope.launch(dispatchers.io) {
+                val repo = modelManagerRepository
+                if (repo == null) {
+                    withContext(dispatchers.main) { onResult(false, "Model manager not available") }
+                    return@launch
+                }
+                val result =
+                    runCatching {
+                        val stream = openStream() ?: error("Unable to open model file stream")
+                        stream.use { repo.importModelStream(filename, it).getOrThrow() }
+                    }
+                handleImportedModelResult(result, onResult)
+            }
+        }
+
+        private suspend fun handleImportedModelResult(
+            result: Result<com.locus.core.domain.models.DownloadedModel>,
+            onResult: (Boolean, String) -> Unit,
+        ) {
+            result.fold(
+                onSuccess = { downloaded ->
+                    modelRegistry?.refresh()
+                    modelManagerRepository?.reloadChatModel(downloaded.filename)
+                    val localRef =
+                        ModelRef(
+                            id = downloaded.filename,
+                            tier = com.locus.core.domain.routing.ModelTier.LOCAL,
+                            providerId = null,
+                        )
+                    val entry =
+                        RegistryEntry(
+                            ref = localRef,
+                            contextLength = 4096,
+                            capabilities = null,
+                            isOffline = true,
+                            benchmarkedTokPerSecond = null,
+                        )
+                    withContext(dispatchers.main) {
+                        selectModel(entry)
+                        onResult(true, downloaded.filename)
+                    }
+                },
+                onFailure = { error ->
+                    withContext(dispatchers.main) {
+                        onResult(false, error.message ?: "Failed to import model")
+                    }
+                },
+            )
         }
 
         private fun updateMessagesObservation(sessionId: String?) {
@@ -317,14 +486,14 @@ class ChatViewModel
             _uiState.update { it.copy(activeSessionId = sessionId) }
             val override = sessionModelOverrides[sessionId]
             if (override != null) {
-                _uiState.update {
-                    it.copy(
-                        activeModel =
-                            com.locus.core.domain.chat.ActiveModelInfo(
-                                name = override.id,
-                                tier = override.tier,
-                            ),
+                val modelInfo =
+                    com.locus.core.domain.chat.ActiveModelInfo(
+                        name = override.id,
+                        tier = override.tier,
                     )
+                _uiState.update { it.copy(activeModel = modelInfo) }
+                viewModelScope.launch(dispatchers.io) {
+                    activeModelRepository.setActiveModel(modelInfo)
                 }
             }
             updateMessagesObservation(sessionId)
@@ -341,21 +510,45 @@ class ChatViewModel
         fun sendMessage(content: String) {
             val trimmed = content.trim()
             val isGenerating = _uiState.value.streamingText != null
-            val isCloudBlocked =
-                _uiState.value.isCloudDisabled &&
-                    _uiState.value.activeModel.tier == com.locus.core.domain.chat.ModelTier.CLOUD
-            if (trimmed.isBlank() || isGenerating || isCloudBlocked) return
+            if (trimmed.isBlank() || isGenerating) return
+
+            if (_uiState.value.isCloudDisabled &&
+                _uiState.value.activeModel.tier == com.locus.core.domain.chat.ModelTier.CLOUD
+            ) {
+                val localFallback = findBestLocalEntry(_uiState.value.availableModels)
+                if (localFallback != null) {
+                    selectModel(localFallback)
+                } else {
+                    val localInfo =
+                        com.locus.core.domain.chat.ActiveModelInfo(
+                            name = "Local Model",
+                            tier = com.locus.core.domain.chat.ModelTier.LOCAL,
+                        )
+                    _uiState.update { it.copy(activeModel = localInfo) }
+                    viewModelScope.launch(dispatchers.io) {
+                        activeModelRepository.setActiveModel(localInfo)
+                    }
+                }
+            }
 
             val sessionId = _uiState.value.activeSessionId ?: "default"
             val currentModel =
-                sessionModelOverrides[sessionId]
-                    ?: ModelRef(
+                if (_uiState.value.isCloudDisabled) {
+                    ModelRef(
                         id = _uiState.value.activeModel.name,
-                        tier = _uiState.value.activeModel.tier,
+                        tier = com.locus.core.domain.routing.ModelTier.LOCAL,
                         providerId = null,
                     )
+                } else {
+                    sessionModelOverrides[sessionId]
+                        ?: ModelRef(
+                            id = _uiState.value.activeModel.name,
+                            tier = _uiState.value.activeModel.tier,
+                            providerId = null,
+                        )
+                }
             val confirmedModel = sessionConfirmedModels[sessionId]
-            if (confirmedModel != null) {
+            if (confirmedModel != null && !_uiState.value.isCloudDisabled) {
                 val decision = sec5TransitionGate.evaluate(confirmedModel, currentModel)
                 if (decision is RouteDecision.RequiresCloudTransitionConfirmation) {
                     pendingMessageContent = trimmed
@@ -392,14 +585,16 @@ class ChatViewModel
             val confirmedModel = sessionConfirmedModels[sessionId]
             if (confirmedModel != null) {
                 sessionModelOverrides[sessionId] = confirmedModel
-                _uiState.update {
-                    it.copy(
-                        activeModel =
-                            com.locus.core.domain.chat.ActiveModelInfo(
-                                name = confirmedModel.id,
-                                tier = confirmedModel.tier,
-                            ),
+                val revertedModelInfo =
+                    com.locus.core.domain.chat.ActiveModelInfo(
+                        name = confirmedModel.id,
+                        tier = confirmedModel.tier,
                     )
+                _uiState.update {
+                    it.copy(activeModel = revertedModelInfo)
+                }
+                viewModelScope.launch(dispatchers.io) {
+                    activeModelRepository.setActiveModel(revertedModelInfo)
                 }
             }
             _pendingCloudTransition.value = null
@@ -419,18 +614,7 @@ class ChatViewModel
                                 newSession.id
                             }
 
-                    val userMsg =
-                        ChatMessage(
-                            id = UuidV7.generate(clock),
-                            sessionId = sessionId,
-                            role = ChatRole.USER,
-                            content = trimmed,
-                            citations = emptyList(),
-                            timestamp = clock.now(),
-                        )
-                    chatRepository.appendMessage(sessionId, userMsg)
-
-                    val history =
+                    val priorHistory =
                         _uiState.value.messages.map { msg ->
                             ProviderMessage(
                                 role =
@@ -443,7 +627,18 @@ class ChatViewModel
                             )
                         }
 
-                    executeStreamingQuery(sessionId, trimmed, history)
+                    val userMsg =
+                        ChatMessage(
+                            id = UuidV7.generate(clock),
+                            sessionId = sessionId,
+                            role = ChatRole.USER,
+                            content = trimmed,
+                            citations = emptyList(),
+                            timestamp = clock.now(),
+                        )
+                    chatRepository.appendMessage(sessionId, userMsg)
+
+                    executeStreamingQuery(sessionId, trimmed, priorHistory)
                 }
         }
 

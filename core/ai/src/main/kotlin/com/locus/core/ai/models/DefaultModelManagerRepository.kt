@@ -22,9 +22,11 @@ import com.locus.core.ai.catalog.CatalogEntry
 import com.locus.core.ai.catalog.CatalogRepository
 import com.locus.core.ai.hf.HuggingFaceCatalogClient
 import com.locus.core.ai.llama.DeviceFingerprintProvider
+import com.locus.core.ai.llama.LlamaRuntime
 import com.locus.core.ai.llama.ModelBenchmark
 import com.locus.core.ai.llama.ModelDownloadWorker
 import com.locus.core.ai.llama.ModelDownloader
+import com.locus.core.ai.llama.ModelKind
 import com.locus.core.domain.models.BenchmarkResult
 import com.locus.core.domain.models.DownloadStatus
 import com.locus.core.domain.models.DownloadedModel
@@ -41,11 +43,12 @@ import com.locus.core.domain.models.RepoSortOrder
 import com.locus.core.domain.models.TaskRequirements
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.InputStream
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 @Singleton
 class DefaultModelManagerRepository
     @Inject
@@ -58,6 +61,7 @@ class DefaultModelManagerRepository
         private val deviceProvider: DeviceFingerprintProvider,
         private val catalogRepository: CatalogRepository,
         private val recommendationRanker: RecommendationRanker,
+        private val llamaRuntime: LlamaRuntime,
     ) : ModelManagerRepository {
         override suspend fun searchRepos(
             query: String,
@@ -174,6 +178,50 @@ class DefaultModelManagerRepository
                     path = file.absolutePath,
                     lastModified = file.lastModified(),
                 )
+            }
+
+        override suspend fun importModelStream(
+            filename: String,
+            inputStream: InputStream,
+        ): Result<DownloadedModel> =
+            runCatching {
+                val file = modelDownloader.importModelStream(filename, inputStream)
+                DownloadedModel(
+                    filename = file.name,
+                    sizeBytes = file.length(),
+                    path = file.absolutePath,
+                    lastModified = file.lastModified(),
+                )
+            }
+
+        override suspend fun reloadChatModel(modelId: String?): Result<String> {
+            val ggufFiles =
+                modelDownloader
+                    .getDownloadedModels()
+                    .filter { it.name.endsWith(".gguf", ignoreCase = true) }
+            val targetFile =
+                if (!modelId.isNullOrBlank()) {
+                    ggufFiles.find { it.name.equals(modelId, ignoreCase = true) }
+                        ?: ggufFiles.firstOrNull { !it.name.contains("embedding", ignoreCase = true) }
+                        ?: ggufFiles.firstOrNull()
+                } else {
+                    ggufFiles.firstOrNull { !it.name.contains("embedding", ignoreCase = true) }
+                        ?: ggufFiles.firstOrNull()
+                }
+            return if (targetFile != null) {
+                llamaRuntime.reloadChatModel(targetFile.absolutePath)
+            } else {
+                llamaRuntime.reloadChatModel(null)
+            }
+        }
+
+        override fun isChatModelLoaded(): Boolean = llamaRuntime.loadedModelKind == ModelKind.CHAT
+
+        override fun getLoadedChatModelName(): String? =
+            if (llamaRuntime.loadedModelKind == ModelKind.CHAT) {
+                llamaRuntime.loadedModelPath?.substringAfterLast('/')
+            } else {
+                null
             }
 
         override suspend fun getStorageStats(): ModelStorageStats = modelDownloader.getStorageStats()

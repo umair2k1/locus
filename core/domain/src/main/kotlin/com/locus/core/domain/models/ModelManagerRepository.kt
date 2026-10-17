@@ -51,6 +51,18 @@ interface ModelManagerRepository {
         sourceBytes: ByteArray,
     ): Result<DownloadedModel> = Result.failure(UnsupportedOperationException("importModel not implemented"))
 
+    suspend fun importModelStream(
+        filename: String,
+        inputStream: java.io.InputStream,
+    ): Result<DownloadedModel> = Result.failure(UnsupportedOperationException("importModelStream not implemented"))
+
+    suspend fun reloadChatModel(modelId: String? = null): Result<String> =
+        Result.failure(UnsupportedOperationException("reloadChatModel not implemented"))
+
+    fun isChatModelLoaded(): Boolean = false
+
+    fun getLoadedChatModelName(): String? = null
+
     suspend fun getStorageStats(): ModelStorageStats
 
     fun observeAllModelMeta(): Flow<List<ModelMeta>>

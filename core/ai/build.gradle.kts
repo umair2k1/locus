@@ -18,6 +18,8 @@ if (localPropertiesFile.exists()) {
 val devApiKey = localProperties.getProperty("LOCUS_DEV_API_KEY", "")
 val devModel = localProperties.getProperty("LOCUS_DEV_MODEL", "gemini-3.5-flash-lite")
 
+val hasLlamaCppSubmodule = file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()
+
 android {
     namespace = "com.locus.core.ai"
     compileSdk = 35
@@ -33,33 +35,37 @@ android {
 
         ndk { abiFilters.addAll(listOf("arm64-v8a", "x86_64")) }
 
-        externalNativeBuild {
-            cmake {
-                arguments.addAll(
-                    listOf(
-                        "-DCMAKE_BUILD_TYPE=Release",
-                        "-DBUILD_SHARED_LIBS=OFF",
-                        "-DLLAMA_OPENSSL=OFF",
-                        "-DGGML_CUDA=OFF",
-                        "-DGGML_METAL=OFF",
-                        "-DGGML_VULKAN=OFF",
-                        "-DGGML_OPENMP=OFF",
-                        "-DLLAMA_BUILD_COMMON=ON",
-                        "-DLLAMA_BUILD_TESTS=OFF",
-                        "-DLLAMA_BUILD_TOOLS=OFF",
-                        "-DLLAMA_BUILD_EXAMPLES=OFF",
-                        "-DLLAMA_BUILD_SERVER=OFF",
-                        "-DLLAMA_BUILD_APP=OFF",
-                    ),
-                )
+        if (hasLlamaCppSubmodule) {
+            externalNativeBuild {
+                cmake {
+                    arguments.addAll(
+                        listOf(
+                            "-DCMAKE_BUILD_TYPE=Release",
+                            "-DBUILD_SHARED_LIBS=OFF",
+                            "-DLLAMA_OPENSSL=OFF",
+                            "-DGGML_CUDA=OFF",
+                            "-DGGML_METAL=OFF",
+                            "-DGGML_VULKAN=OFF",
+                            "-DGGML_OPENMP=OFF",
+                            "-DLLAMA_BUILD_COMMON=ON",
+                            "-DLLAMA_BUILD_TESTS=OFF",
+                            "-DLLAMA_BUILD_TOOLS=OFF",
+                            "-DLLAMA_BUILD_EXAMPLES=OFF",
+                            "-DLLAMA_BUILD_SERVER=OFF",
+                            "-DLLAMA_BUILD_APP=OFF",
+                        ),
+                    )
+                }
             }
         }
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    if (hasLlamaCppSubmodule) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
     }
 

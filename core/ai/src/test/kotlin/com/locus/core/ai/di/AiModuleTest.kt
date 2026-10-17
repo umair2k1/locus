@@ -21,6 +21,7 @@ import com.locus.core.ai.embedding.EmbeddingRunner
 import com.locus.core.ai.llama.LlamaRuntime
 import com.locus.core.ai.llama.LocalLlamaChatModelClient
 import com.locus.core.ai.llama.ModelDownloader
+import com.locus.core.ai.llama.ModelKind
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -129,5 +130,43 @@ class AiModuleTest {
             assertEquals(512, result2.size)
             assertEquals(1, loadCount)
             assertEquals(2, embedCount)
+        }
+
+    @Test
+    fun embeddingRunnerGatewayAdapter_doesNotEvictLoadedChatModel() =
+        runTest {
+            val modelsDir = File(context.filesDir, "models")
+            modelsDir.mkdirs()
+            val fakeModel = File(modelsDir, ModelDownloader.DEFAULT_MODEL_FILENAME)
+            fakeModel.writeText("fake gguf content")
+
+            val downloader = ModelDownloader(context, OkHttpClient())
+            var loadCount = 0
+            var unloadCount = 0
+            val fakeRuntime =
+                object : LlamaRuntime() {
+                    override val loadedModelKind: ModelKind
+                        get() = ModelKind.CHAT
+
+                    override suspend fun loadModel(
+                        path: String,
+                        kind: ModelKind,
+                    ): Result<Unit> {
+                        loadCount++
+                        return Result.success(Unit)
+                    }
+
+                    override suspend fun unload() {
+                        unloadCount++
+                    }
+                }
+
+            val runner = EmbeddingRunner(fakeRuntime)
+            val adapter = EmbeddingRunnerGatewayAdapter(runner, downloader, fakeRuntime)
+
+            val vector = adapter.embed("query while chat model is loaded")
+            assertEquals(512, vector.size)
+            assertEquals("Must not unload active CHAT model", 0, unloadCount)
+            assertEquals("Must not load EMBEDDING model over active CHAT model", 0, loadCount)
         }
 }

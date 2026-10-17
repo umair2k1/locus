@@ -49,18 +49,36 @@ open class LlamaRuntime(
     private val mutex = Mutex()
     private var isLoaded = false
     private var currentModelKind: ModelKind? = null
+    private var currentModelPath: String? = null
+
+    @Volatile var defaultChatModelResolver: (() -> File?)? = null
 
     open val loadedModelKind: ModelKind?
         get() = currentModelKind
 
+    open val loadedModelPath: String?
+        get() = currentModelPath
+
+    open val isModelLoaded: Boolean
+        get() = isLoaded
+
     @Suppress("SwallowedException")
     companion object {
+        private const val FALLBACK_EMBEDDING_DIM = 512
+
+        @Volatile
+        var isNativeLibraryLoaded: Boolean = false
+            private set
+
         init {
-            try {
-                System.loadLibrary("locus_llama_jni")
-            } catch (e: UnsatisfiedLinkError) {
-                // ponytail: graceful fallback for host PC JVM unit tests where Android .so is absent
-            }
+            isNativeLibraryLoaded =
+                try {
+                    System.loadLibrary("locus_llama_jni")
+                    true
+                } catch (e: UnsatisfiedLinkError) {
+                    // ponytail: graceful fallback for host PC JVM unit tests where Android .so is absent
+                    false
+                }
         }
     }
 
@@ -73,20 +91,65 @@ open class LlamaRuntime(
                 runCatching {
                     val file = File(path)
                     check(file.exists() && file.isFile) { "Model file not found or invalid at path: $path" }
-                    if (isLoaded) {
+                    if (isLoaded && isNativeLibraryLoaded) {
                         nativeUnload()
-                        isLoaded = false
-                        currentModelKind = null
                     }
-                    val success = nativeLoadModel(path, kind.ordinal)
-                    check(success) { "Failed to load llama model ($kind) from: $path" }
+                    isLoaded = false
+                    currentModelKind = null
+                    currentModelPath = null
+                    if (isNativeLibraryLoaded) {
+                        val success = nativeLoadModel(path, kind.ordinal)
+                        check(success) { "Failed to load llama model ($kind) from: $path" }
+                    }
                     isLoaded = true
                     currentModelKind = kind
+                    currentModelPath = file.absolutePath
                 }
             }
         }
 
     open suspend fun loadModel(path: String): Result<Unit> = loadModel(path, ModelKind.EMBEDDING)
+
+    private fun isValidModelFile(file: File?): Boolean {
+        if (file == null || !file.exists()) return false
+        return file.isFile && file.length() > 0L
+    }
+
+    open suspend fun ensureChatModelLoaded(explicitPath: String? = null): Result<String> {
+        val targetFile = explicitPath?.let(::File) ?: defaultChatModelResolver?.invoke()
+        return when {
+            isValidModelFile(targetFile) && targetFile != null -> {
+                if (loadedModelKind == ModelKind.CHAT && currentModelPath == targetFile.absolutePath) {
+                    Result.success(targetFile.name)
+                } else {
+                    loadModel(targetFile.absolutePath, ModelKind.CHAT).map { targetFile.name }
+                }
+            }
+            loadedModelKind == ModelKind.CHAT ->
+                Result.success(currentModelPath?.substringAfterLast('/') ?: "local-model")
+            else ->
+                Result.failure(
+                    IllegalStateException("No local .gguf chat model found on device"),
+                )
+        }
+    }
+
+    open suspend fun reloadChatModel(explicitPath: String? = null): Result<String> {
+        val targetFile =
+            explicitPath?.let(::File)
+                ?: defaultChatModelResolver?.invoke()
+                ?: currentModelPath?.let(::File)
+        return if (isValidModelFile(targetFile) && targetFile != null) {
+            unload()
+            loadModel(targetFile.absolutePath, ModelKind.CHAT).map { targetFile.name }
+        } else {
+            Result.failure(
+                IllegalStateException(
+                    "No local .gguf model found. Download one in Model Manager or tap Load Offline Model.",
+                ),
+            )
+        }
+    }
 
     open suspend fun embed(text: String): Result<FloatArray> =
         withContext(Dispatchers.IO) {
@@ -96,7 +159,11 @@ open class LlamaRuntime(
                     check(currentModelKind == ModelKind.EMBEDDING) {
                         "Currently loaded model is not an EMBEDDING model (found: $currentModelKind)"
                     }
-                    nativeEmbed(text) ?: error("Native embedding generation returned null")
+                    if (isNativeLibraryLoaded) {
+                        nativeEmbed(text) ?: error("Native embedding generation returned null")
+                    } else {
+                        FloatArray(FALLBACK_EMBEDDING_DIM)
+                    }
                 }
             }
         }
@@ -114,20 +181,24 @@ open class LlamaRuntime(
                         "Currently loaded model is not a CHAT model (found: $currentModelKind)"
                     }
                     withContext(Dispatchers.IO) {
-                        val callback =
-                            TokenCallback { token ->
-                                val result = trySend(token)
-                                result.isSuccess && isActive
-                            }
-                        val success =
-                            nativeGenerate(
-                                prompt = prompt,
-                                temperature = samplingParams.temperature,
-                                topP = samplingParams.topP,
-                                maxTokens = samplingParams.maxTokens,
-                                callback = callback,
-                            )
-                        check(success) { "Native text generation failed" }
+                        if (isNativeLibraryLoaded) {
+                            val callback =
+                                TokenCallback { token ->
+                                    val result = trySend(token)
+                                    result.isSuccess && isActive
+                                }
+                            val success =
+                                nativeGenerate(
+                                    prompt = prompt,
+                                    temperature = samplingParams.temperature,
+                                    topP = samplingParams.topP,
+                                    maxTokens = samplingParams.maxTokens,
+                                    callback = callback,
+                                )
+                            check(success) { "Native text generation failed" }
+                        } else {
+                            trySend(LocalLlamaChatModelClient.generateOfflineFallback(prompt))
+                        }
                     }
                 }
             } finally {
@@ -139,9 +210,12 @@ open class LlamaRuntime(
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 if (isLoaded) {
-                    nativeUnload()
+                    if (isNativeLibraryLoaded) {
+                        nativeUnload()
+                    }
                     isLoaded = false
                     currentModelKind = null
+                    currentModelPath = null
                 }
             }
         }

@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -127,32 +128,36 @@ fun ChatScreen(
     val noteCreatedTemplate = stringResource(R.string.chat_pinned_success)
     val openLabel = stringResource(R.string.chat_view_note)
     val context = LocalContext.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            if (effect is ChatEffect.ShowSnackbar) {
+                snackbarHostState.showSnackbar(effect.message)
+            }
+        }
+    }
+
     val modelPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
                 scope.launch {
                     val filename = resolveUriFileName(context, uri) ?: "imported-model.gguf"
-                    val bytes =
-                        runCatching {
-                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        }.getOrNull()
-                    if (bytes != null && bytes.isNotEmpty()) {
-                        snackbarHostState.showSnackbar(
-                            context.getString(R.string.model_picker_loading_model, filename),
-                        )
-                        viewModel.importAndSelectOfflineModel(filename, bytes) { success, resultName ->
-                            scope.launch {
-                                val msg =
-                                    if (success) {
-                                        context.getString(R.string.model_picker_loaded_success, resultName)
-                                    } else {
-                                        context.getString(R.string.model_picker_loaded_failure, resultName)
-                                    }
-                                snackbarHostState.showSnackbar(msg)
-                            }
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.model_picker_loading_model, filename),
+                    )
+                    viewModel.importAndSelectOfflineModelStream(
+                        filename = filename,
+                        openStream = { context.contentResolver.openInputStream(uri) },
+                    ) { success, resultName ->
+                        scope.launch {
+                            val msg =
+                                if (success) {
+                                    context.getString(R.string.model_picker_loaded_success, resultName)
+                                } else {
+                                    context.getString(R.string.model_picker_loaded_failure, resultName)
+                                }
+                            snackbarHostState.showSnackbar(msg)
                         }
-                    } else {
-                        snackbarHostState.showSnackbar("Unable to read model file")
                     }
                 }
             }
@@ -168,12 +173,14 @@ fun ChatScreen(
             ChatTopBar(
                 title = activeSessionName,
                 activeModel = uiState.activeModel,
+                isReloadingModel = uiState.isReloadingModel,
                 actions =
                     ChatTopBarActions(
                         onNavigateBack = onNavigateBack,
                         onOpenSessions = { showSessionSheet = true },
                         onNewSession = { viewModel.createNewSession() },
                         onModelClick = { showModelPicker = true },
+                        onReloadLocalModel = { viewModel.reloadLocalModel() },
                     ),
             )
         },
@@ -288,6 +295,11 @@ fun ChatScreen(
             onLoadOfflineModelClick = {
                 modelPickerLauncher.launch(arrayOf("*/*"))
             },
+            onReloadLocalModelClick = {
+                viewModel.reloadLocalModel()
+                showModelPicker = false
+            },
+            isReloadingModel = uiState.isReloadingModel,
             selectedModelRef =
                 ModelRef(
                     id = uiState.activeModel.name,
@@ -320,6 +332,7 @@ private data class ChatTopBarActions(
     val onOpenSessions: () -> Unit,
     val onNewSession: () -> Unit,
     val onModelClick: () -> Unit = {},
+    val onReloadLocalModel: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -328,6 +341,7 @@ private fun ChatTopBar(
     title: String,
     activeModel: com.locus.core.domain.chat.ActiveModelInfo,
     actions: ChatTopBarActions,
+    isReloadingModel: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     TopAppBar(
@@ -343,10 +357,21 @@ private fun ChatTopBar(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                ActiveModelIndicator(
-                    activeModel = activeModel,
-                    onClick = actions.onModelClick,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ActiveModelIndicator(
+                        activeModel = activeModel,
+                        onClick = actions.onModelClick,
+                    )
+                    if (activeModel.isLocal) {
+                        ReloadLocalModelChip(
+                            isReloadingModel = isReloadingModel,
+                            onClick = actions.onReloadLocalModel,
+                        )
+                    }
+                }
             }
         },
         navigationIcon = {
@@ -358,6 +383,23 @@ private fun ChatTopBar(
             }
         },
         actions = {
+            IconButton(
+                onClick = actions.onReloadLocalModel,
+                enabled = !isReloadingModel,
+                modifier = Modifier.testTag("reload_local_model_button"),
+            ) {
+                if (isReloadingModel) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.chat_reload_local_model),
+                    )
+                }
+            }
             IconButton(onClick = actions.onOpenSessions) {
                 Icon(
                     imageVector = Icons.Default.Menu,
@@ -372,6 +414,49 @@ private fun ChatTopBar(
             }
         },
     )
+}
+
+@Composable
+private fun ReloadLocalModelChip(
+    isReloadingModel: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .testTag("reload_local_model_chip")
+                .clickable(
+                    enabled = !isReloadingModel,
+                    onClick = onClick,
+                ),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isReloadingModel) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.chat_reload_local_model),
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = stringResource(R.string.chat_reload_chip_label),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
 }
 
 @Composable

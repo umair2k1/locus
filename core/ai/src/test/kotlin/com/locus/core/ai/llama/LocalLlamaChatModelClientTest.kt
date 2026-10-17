@@ -160,4 +160,34 @@ class LocalLlamaChatModelClientTest {
             assertTrue("Must report not found", fullText.contains("could not find any relevant notes"))
             assertTrue("Last event must be Done", events.last() is StreamEvent.Done)
         }
+
+    @Test
+    fun generate_callsEnsureChatModelLoadedAndStreamsTokensFromNewlyLoadedModel() =
+        runTest {
+            var ensureLoadedCalled = false
+            val runtime =
+                object : LlamaRuntime() {
+                    private var kind: ModelKind? = null
+
+                    override val loadedModelKind: ModelKind?
+                        get() = kind
+
+                    override suspend fun ensureChatModelLoaded(preferredFilename: String?): Result<String> {
+                        ensureLoadedCalled = true
+                        kind = ModelKind.CHAT
+                        return Result.success("qwen-local.gguf")
+                    }
+
+                    override fun generateStream(
+                        prompt: String,
+                        samplingParams: SamplingParams,
+                    ): Flow<String> = flowOf("Loaded ", "from ", "disk!")
+                }
+            val client = LocalLlamaChatModelClient(runtime)
+            val events = client.generate("Hello local model").toList()
+
+            assertTrue("Should call ensureChatModelLoaded", ensureLoadedCalled)
+            val text = events.filterIsInstance<StreamEvent.TokenDelta>().joinToString("") { it.text }
+            assertEquals("Loaded from disk!", text)
+        }
 }

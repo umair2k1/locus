@@ -42,6 +42,7 @@ class LocalLlamaChatModelClient
             tools: List<ToolSchema>,
         ): Flow<StreamEvent> =
             flow {
+                runtime.ensureChatModelLoaded()
                 if (runtime.loadedModelKind == ModelKind.CHAT) {
                     runtime.generateStream(prompt).collect { token -> emit(StreamEvent.TokenDelta(token)) }
                     emit(StreamEvent.Done(finishReason = "stop"))
@@ -61,89 +62,89 @@ class LocalLlamaChatModelClient
                 )
             }
 
-        private fun generateOfflineFallback(prompt: String): String {
-            val contextSection = extractContextSection(prompt) ?: return NOT_FOUND_MESSAGE
-            val userQuery = prompt.substringAfter("\nUser:", "").substringBefore("\nAssistant:").trim()
-            val bestChunk = findBestMatchingChunk(contextSection, userQuery)
-            return if (bestChunk != null) {
-                "Based on your notes:\n${bestChunk.second} [${bestChunk.first}]"
-            } else {
-                NOT_FOUND_MESSAGE
-            }
-        }
-
-        private fun extractContextSection(prompt: String): String? {
-            val contextMarker = "Context:\n"
-            val contextIndex = prompt.indexOf(contextMarker)
-            if (contextIndex == -1 || prompt.contains("No relevant notes or context chunks were found")) {
-                return null
-            }
-            val userIndex = prompt.indexOf("\nUser:", contextIndex)
-            return if (userIndex != -1) {
-                prompt.substring(contextIndex + contextMarker.length, userIndex)
-            } else {
-                prompt.substring(contextIndex + contextMarker.length)
-            }
-        }
-
-        private fun findBestMatchingChunk(
-            contextSection: String,
-            userQuery: String,
-        ): Pair<Int, String>? {
-            val queryTokens =
-                userQuery.lowercase().split(Regex("[^a-zA-Z0-9]+")).filter {
-                    it.length >= MIN_TOKEN_LENGTH
-                }
-            val chunkPattern = Regex("""(?m)^\[(\d+)\]""")
-            val chunkMatches = chunkPattern.findAll(contextSection).toList()
-            if (chunkMatches.isEmpty()) return null
-
-            var bestChunkNum = 1
-            var bestScore = -1
-            var bestContent = ""
-
-            for (i in chunkMatches.indices) {
-                val currentMatch = chunkMatches[i]
-                val chunkNum = currentMatch.groupValues[1].toIntOrNull() ?: (i + 1)
-                val start = currentMatch.range.first
-                val end =
-                    if (i + 1 < chunkMatches.size) {
-                        chunkMatches[i + 1].range.first
-                    } else {
-                        contextSection.length
-                    }
-                val block = contextSection.substring(start, end).trim()
-                val contentText = extractBlockContent(block)
-                val score = queryTokens.count { token -> block.lowercase().contains(token) }
-                if (score > bestScore && contentText.isNotBlank()) {
-                    bestScore = score
-                    bestChunkNum = chunkNum
-                    bestContent = contentText
-                }
-            }
-
-            return if (bestContent.isNotBlank()) Pair(bestChunkNum, bestContent) else null
-        }
-
-        private fun extractBlockContent(block: String): String =
-            block
-                .lines()
-                .map { it.trim() }
-                .filter {
-                    it.startsWith("Content:") ||
-                        (
-                            it.isNotBlank() &&
-                                !it.startsWith("Title:") &&
-                                !it.startsWith("Heading:") &&
-                                !it.startsWith("[")
-                        )
-                }.joinToString("\n") { it.removePrefix("Content:").trim() }
-                .trim()
-
         companion object {
             private const val FALLBACK_CHUNK_SIZE = 12
             private const val MIN_TOKEN_LENGTH = 3
             private const val NOT_FOUND_MESSAGE =
                 "I could not find any relevant notes or information about that in your notes."
+
+            internal fun generateOfflineFallback(prompt: String): String {
+                val contextSection = extractContextSection(prompt) ?: return NOT_FOUND_MESSAGE
+                val userQuery = prompt.substringAfter("\nUser:", "").substringBefore("\nAssistant:").trim()
+                val bestChunk = findBestMatchingChunk(contextSection, userQuery)
+                return if (bestChunk != null) {
+                    "Based on your notes:\n${bestChunk.second} [${bestChunk.first}]"
+                } else {
+                    NOT_FOUND_MESSAGE
+                }
+            }
+
+            private fun extractContextSection(prompt: String): String? {
+                val contextMarker = "Context:\n"
+                val contextIndex = prompt.indexOf(contextMarker)
+                if (contextIndex == -1 || prompt.contains("No relevant notes or context chunks were found")) {
+                    return null
+                }
+                val userIndex = prompt.indexOf("\nUser:", contextIndex)
+                return if (userIndex != -1) {
+                    prompt.substring(contextIndex + contextMarker.length, userIndex)
+                } else {
+                    prompt.substring(contextIndex + contextMarker.length)
+                }
+            }
+
+            private fun findBestMatchingChunk(
+                contextSection: String,
+                userQuery: String,
+            ): Pair<Int, String>? {
+                val queryTokens =
+                    userQuery.lowercase().split(Regex("[^a-zA-Z0-9]+")).filter {
+                        it.length >= MIN_TOKEN_LENGTH
+                    }
+                val chunkPattern = Regex("""(?m)^\[(\d+)\]""")
+                val chunkMatches = chunkPattern.findAll(contextSection).toList()
+                if (chunkMatches.isEmpty()) return null
+
+                var bestChunkNum = 1
+                var bestScore = -1
+                var bestContent = ""
+
+                for (i in chunkMatches.indices) {
+                    val currentMatch = chunkMatches[i]
+                    val chunkNum = currentMatch.groupValues[1].toIntOrNull() ?: (i + 1)
+                    val start = currentMatch.range.first
+                    val end =
+                        if (i + 1 < chunkMatches.size) {
+                            chunkMatches[i + 1].range.first
+                        } else {
+                            contextSection.length
+                        }
+                    val block = contextSection.substring(start, end).trim()
+                    val contentText = extractBlockContent(block)
+                    val score = queryTokens.count { token -> block.lowercase().contains(token) }
+                    if (score > bestScore && contentText.isNotBlank()) {
+                        bestScore = score
+                        bestChunkNum = chunkNum
+                        bestContent = contentText
+                    }
+                }
+
+                return if (bestContent.isNotBlank()) Pair(bestChunkNum, bestContent) else null
+            }
+
+            private fun extractBlockContent(block: String): String =
+                block
+                    .lines()
+                    .map { it.trim() }
+                    .filter {
+                        it.startsWith("Content:") ||
+                            (
+                                it.isNotBlank() &&
+                                    !it.startsWith("Title:") &&
+                                    !it.startsWith("Heading:") &&
+                                    !it.startsWith("[")
+                            )
+                    }.joinToString("\n") { it.removePrefix("Content:").trim() }
+                    .trim()
         }
     }

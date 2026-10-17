@@ -24,9 +24,11 @@ import com.locus.core.domain.providers.StreamEvent
 import com.locus.core.domain.search.HybridSearchUseCase
 import com.locus.core.domain.search.SearchResult
 import com.locus.core.domain.search.SearchScope
+import com.locus.core.domain.settings.NetworkSettingsStore
 import com.locus.core.domain.usage.UsageEvent
 import com.locus.core.domain.usage.UsageTracker
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Singleton
 
 /**
@@ -52,6 +54,7 @@ class RagAnswerUseCase(
     private val activeModelRepository: ActiveModelRepository? = null,
     private val localChatClient: ChatModelClient? = null,
     private val usageTracker: UsageTracker? = null,
+    private val networkSettingsStore: NetworkSettingsStore? = null,
 ) {
     constructor(
         hybridSearch: HybridSearchUseCase,
@@ -98,9 +101,14 @@ class RagAnswerUseCase(
             }
 
         val textBuffer = StringBuilder()
+        val isCloudDisabled = networkSettingsStore?.isCloudDisabled?.firstOrNull() ?: false
+        val isLocalActive = activeModelRepository?.getActiveModel()?.isLocal == true
+        val useLocalModel = isCloudDisabled || isLocalActive
         val streamFlow =
-            if (activeModelRepository?.getActiveModel()?.isLocal == true && localChatClient != null) {
+            if (useLocalModel && localChatClient != null) {
                 localChatClient.generate(buildLocalPrompt(systemPrompt, history, query))
+            } else if (isCloudDisabled) {
+                error("Offline Mode is enabled: cloud connections are disabled and no local model client is available.")
             } else {
                 activeAdapter.streamChat(messages)
             }

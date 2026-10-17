@@ -33,6 +33,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +71,8 @@ fun ModelPickerSheet(
     onModelSelected: (RegistryEntry) -> Unit,
     onDismissRequest: () -> Unit,
     onLoadOfflineModelClick: (() -> Unit)? = null,
+    onReloadLocalModelClick: (() -> Unit)? = null,
+    isReloadingModel: Boolean = false,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
 ) {
@@ -79,13 +83,15 @@ fun ModelPickerSheet(
         onModelSelected = onModelSelected,
         onDismissRequest = onDismissRequest,
         onLoadOfflineModelClick = onLoadOfflineModelClick,
+        onReloadLocalModelClick = onReloadLocalModelClick,
+        isReloadingModel = isReloadingModel,
         modifier = modifier,
         sheetState = sheetState,
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun ModelPickerSheet(
     entries: List<RegistryEntry>,
@@ -93,6 +99,8 @@ fun ModelPickerSheet(
     onModelSelected: (RegistryEntry) -> Unit,
     onDismissRequest: () -> Unit,
     onLoadOfflineModelClick: (() -> Unit)? = null,
+    onReloadLocalModelClick: (() -> Unit)? = null,
+    isReloadingModel: Boolean = false,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
 ) {
@@ -135,6 +143,40 @@ fun ModelPickerSheet(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = stringResource(R.string.model_picker_load_offline_file))
+                        }
+                    }
+                }
+
+                if (onReloadLocalModelClick != null) {
+                    item {
+                        OutlinedButton(
+                            onClick = onReloadLocalModelClick,
+                            enabled = !isReloadingModel,
+                            modifier = Modifier.fillMaxWidth().testTag("reload_model_memory_button"),
+                        ) {
+                            if (isReloadingModel) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (isReloadingModel) {
+                                            R.string.model_picker_reloading_memory
+                                        } else {
+                                            R.string.model_picker_reload_memory
+                                        },
+                                    ),
+                            )
                         }
                     }
                 }

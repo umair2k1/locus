@@ -184,6 +184,12 @@
     <string name="model_picker_cloud_badge">Cloud</string>
     <string name="model_picker_no_local_models">No local models found in models directory. Copy .gguf files or download from Model Manager.</string>
     <string name="model_picker_load_offline_file">Load Offline Model (.gguf)</string>
+    <string name="model_picker_reload_memory">Reload Local Model into Memory</string>
+    <string name="model_picker_reloading_memory">Reloading local model…</string>
+    <string name="chat_reload_local_model">Reload local model into memory</string>
+    <string name="chat_reload_chip_label">Reload RAM</string>
+    <string name="chat_model_reloaded_success">Loaded %1$s into memory</string>
+    <string name="chat_model_reloaded_failure">Reload failed: %1$s</string>
     <string name="model_picker_loading_model">Importing %1$s…</string>
     <string name="model_picker_loaded_success">Loaded offline model: %1$s</string>
     <string name="model_picker_loaded_failure">Failed to import model: %1$s</string>

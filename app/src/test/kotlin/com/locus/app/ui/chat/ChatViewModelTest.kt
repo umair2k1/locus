@@ -27,8 +27,18 @@ import com.locus.core.domain.chat.CitedSource
 import com.locus.core.domain.chat.ModelTier
 import com.locus.core.domain.chat.RagAnswerUseCase
 import com.locus.core.domain.chat.ThermalMonitor
+import com.locus.core.domain.models.BenchmarkResult
+import com.locus.core.domain.models.DownloadedModel
+import com.locus.core.domain.models.ModelDownloadProgress
+import com.locus.core.domain.models.ModelFileInfo
+import com.locus.core.domain.models.ModelManagerRepository
+import com.locus.core.domain.models.ModelMeta
+import com.locus.core.domain.models.ModelRecommendation
 import com.locus.core.domain.models.ModelRegistry
+import com.locus.core.domain.models.ModelRepoSummary
+import com.locus.core.domain.models.ModelStorageStats
 import com.locus.core.domain.models.RegistryEntry
+import com.locus.core.domain.models.RepoSortOrder
 import com.locus.core.domain.notes.Checksum
 import com.locus.core.domain.notes.Note
 import com.locus.core.domain.notes.NoteRepository
@@ -521,6 +531,99 @@ class ChatViewModelTest {
                     .filter { it.role == ChatRole.ASSISTANT }
             assertTrue(assistantMessages.isNotEmpty())
             assertEquals("Partial answer before user stops", assistantMessages.last().content)
+        }
+
+    @Test
+    fun reloadLocalModel_loadsModelIntoMemoryAndUpdatesActiveModelToLocal() =
+        runTest(testDispatcher) {
+            var reloadedModelId: String? = null
+            val fakeModelManager =
+                object : ModelManagerRepository {
+                    override suspend fun searchRepos(
+                        query: String,
+                        sort: RepoSortOrder?,
+                    ) = Result.success(emptyList<ModelRepoSummary>())
+
+                    override suspend fun listQuantFiles(repoId: String) = Result.success(emptyList<ModelFileInfo>())
+
+                    override suspend fun enqueueDownload(
+                        repoId: String,
+                        filename: String,
+                        sha256: String,
+                        expectedSize: Long,
+                    ) = Result.success("work-1")
+
+                    override suspend fun cancelDownload(workId: String) = Unit
+
+                    override suspend fun removeDownload(
+                        workId: String,
+                        filename: String,
+                    ) = Unit
+
+                    override fun observeDownloads() = emptyFlow<List<ModelDownloadProgress>>()
+
+                    override suspend fun getDownloadedModels() =
+                        listOf(
+                            DownloadedModel(
+                                filename = "qwen-2.5-3b-instruct.gguf",
+                                path = "/data/models/qwen-2.5-3b-instruct.gguf",
+                                sizeBytes = 1024L,
+                            ),
+                        )
+
+                    override suspend fun deleteModel(filename: String) = true
+
+                    override suspend fun getStorageStats() = ModelStorageStats(1024L, 1024L, 10240L)
+
+                    override suspend fun saveModelNotesAndRating(
+                        modelId: String,
+                        notes: String,
+                        rating: Int,
+                    ) = Unit
+
+                    override suspend fun runBenchmark(
+                        modelId: String,
+                        path: String,
+                    ): Result<BenchmarkResult> = Result.failure(UnsupportedOperationException())
+
+                    override fun observeAllModelMeta() = emptyFlow<List<ModelMeta>>()
+
+                    override fun observeRecommendations() = emptyFlow<List<ModelRecommendation>>()
+
+                    override suspend fun reloadChatModel(modelId: String?): Result<String> {
+                        reloadedModelId = modelId ?: "qwen-2.5-3b-instruct.gguf"
+                        return Result.success(reloadedModelId!!)
+                    }
+
+                    override fun isChatModelLoaded(): Boolean = reloadedModelId != null
+                }
+
+            val vm =
+                ChatViewModel(
+                    chatRepository = fakeChatRepository,
+                    ragAnswerUseCase = ragAnswerUseCase,
+                    noteRepository = fakeNoteRepository,
+                    clock = fakeClock,
+                    dispatchers = testDispatchers,
+                    activeModelRepository = fakeActiveModelRepository,
+                    modelManagerRepository = fakeModelManager,
+                )
+            advanceUntilIdle()
+
+            var callbackSuccess: Boolean? = null
+            var callbackName: String? = null
+            vm.reloadLocalModel { success, name ->
+                callbackSuccess = success
+                callbackName = name
+            }
+            advanceUntilIdle()
+
+            assertEquals(true, callbackSuccess)
+            assertEquals("qwen-2.5-3b-instruct.gguf", callbackName)
+            assertEquals("qwen-2.5-3b-instruct.gguf", vm.uiState.value.activeModel.name)
+            assertEquals(ModelTier.LOCAL, vm.uiState.value.activeModel.tier)
+            assertTrue(vm.uiState.value.isLocalModelLoaded)
+            assertFalse(vm.uiState.value.isReloadingModel)
         }
 
     // --- Fakes ---
