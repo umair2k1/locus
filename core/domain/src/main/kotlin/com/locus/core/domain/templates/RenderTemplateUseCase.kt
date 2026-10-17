@@ -27,11 +27,8 @@ class RenderTemplateUseCase
             templateBody: String,
             selection: String? = null,
             note: String? = null,
-        ): String {
-            val safeSelection = selection.orEmpty()
-            val safeNote = note.orEmpty()
-            return templateBody
-                .replace("{{selection}}", safeSelection)
-                .replace("{{note}}", safeNote)
-        }
+        ): String =
+            templateBody
+                .replace("{{selection}}", selection.orEmpty())
+                .replace("{{note}}", note.orEmpty())
     }

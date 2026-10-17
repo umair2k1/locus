@@ -17,8 +17,8 @@
 package com.locus.core.domain.dashboard
 
 import com.locus.core.domain.chat.ChatModelClient
+import com.locus.core.domain.chat.generateText
 import com.locus.core.domain.notes.NoteRepository
-import com.locus.core.domain.providers.StreamEvent
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.ModelTier
 import com.locus.core.domain.routing.RouteAndSend
@@ -259,17 +259,8 @@ class ComputeClustersUseCase(
             "\nOutput ONLY the topic label (no markdown, no quotes, no extra text):"
 
     private suspend fun generateLabel(prompt: String): String {
-        val sb = StringBuilder()
-        try {
-            chatModelClient.generate(prompt).collect { event ->
-                if (event is StreamEvent.TokenDelta) {
-                    sb.append(event.text)
-                }
-            }
-        } catch (_: Exception) {
-            // Return accumulated or blank
-        }
-        return sb.toString().trim()
+        val raw = runCatching { chatModelClient.generateText(prompt) }.getOrDefault("")
+        return raw.trim()
     }
 
     private fun cleanLabel(raw: String): String =

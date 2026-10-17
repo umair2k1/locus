@@ -17,8 +17,8 @@
 package com.locus.core.domain.dashboard
 
 import com.locus.core.domain.chat.ChatModelClient
+import com.locus.core.domain.chat.generateText
 import com.locus.core.domain.notes.NoteRepository
-import com.locus.core.domain.providers.StreamEvent
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.RouteAndSend
 import com.locus.core.domain.routing.RouteDecision
@@ -102,15 +102,7 @@ class ComputeDigestUseCase
             )
         }
 
-        private suspend fun generateSummary(prompt: String): String {
-            val sb = StringBuilder()
-            chatModelClient.generate(prompt).collect { event ->
-                if (event is StreamEvent.TokenDelta) {
-                    sb.append(event.text)
-                }
-            }
-            return sb.toString().trim()
-        }
+        private suspend fun generateSummary(prompt: String): String = chatModelClient.generateText(prompt).trim()
 
         internal fun computeCutoff(
             period: DigestPeriod,

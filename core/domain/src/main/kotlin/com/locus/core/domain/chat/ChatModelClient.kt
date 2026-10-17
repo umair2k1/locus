@@ -31,3 +31,13 @@ interface ChatModelClient {
         tools: List<ToolSchema> = emptyList(),
     ): Flow<StreamEvent>
 }
+
+suspend fun ChatModelClient.generateText(prompt: String): String {
+    val sb = StringBuilder()
+    generate(prompt).collect { event ->
+        if (event is StreamEvent.TokenDelta) {
+            sb.append(event.text)
+        }
+    }
+    return sb.toString()
+}

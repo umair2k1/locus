@@ -17,7 +17,7 @@
 package com.locus.core.domain.notes
 
 import com.locus.core.domain.chat.ChatModelClient
-import com.locus.core.domain.providers.StreamEvent
+import com.locus.core.domain.chat.generateText
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.RouteAndSend
 import com.locus.core.domain.routing.RouteDecision
@@ -54,13 +54,7 @@ class InlineAiUseCase
             }
 
             val prompt = buildPrompt(action, text)
-            val result = StringBuilder()
-            chatModelClient.generate(prompt).collect { event ->
-                if (event is StreamEvent.TokenDelta) {
-                    result.append(event.text)
-                }
-            }
-            return result.toString().trim()
+            return chatModelClient.generateText(prompt).trim()
         }
 
         fun buildPrompt(

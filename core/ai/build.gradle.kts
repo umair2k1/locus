@@ -85,7 +85,6 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.sse)
     implementation(libs.serialization.json)
     implementation(libs.work.runtime.ktx)
     implementation(libs.hilt.work)

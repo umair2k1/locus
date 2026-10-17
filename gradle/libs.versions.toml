@@ -11,7 +11,6 @@ hilt-navigation-compose = "1.2.0"
 junit = "4.13.2"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
-mockk = "1.13.13"
 okhttp = "4.12.0"
 robolectric = "4.14"
 room = "2.6.1"
@@ -77,7 +76,6 @@ security-crypto = { group = "androidx.security", name = "security-crypto", versi
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
-mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 # Static analysis

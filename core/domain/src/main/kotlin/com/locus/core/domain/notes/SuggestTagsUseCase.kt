@@ -17,7 +17,7 @@
 package com.locus.core.domain.notes
 
 import com.locus.core.domain.chat.ChatModelClient
-import com.locus.core.domain.providers.StreamEvent
+import com.locus.core.domain.chat.generateText
 import com.locus.core.domain.routing.ModelRef
 import com.locus.core.domain.routing.RouteAndSend
 import com.locus.core.domain.routing.RouteDecision
@@ -48,13 +48,7 @@ class SuggestTagsUseCase
             }
 
             val prompt = buildPrompt(body)
-            val result = StringBuilder()
-            chatModelClient.generate(prompt).collect { event ->
-                if (event is StreamEvent.TokenDelta) {
-                    result.append(event.text)
-                }
-            }
-            return parseTags(result.toString())
+            return parseTags(chatModelClient.generateText(prompt))
         }
 
         fun buildPrompt(body: String): String =

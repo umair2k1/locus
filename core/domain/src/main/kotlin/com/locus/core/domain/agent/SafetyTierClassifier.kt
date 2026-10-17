@@ -43,22 +43,10 @@ enum class WriteToolName {
             }
 
     companion object {
-        fun fromToolName(name: String): WriteToolName? =
-            when (name.trim().lowercase()) {
-                "search_notes" -> SEARCH_NOTES
-                "read_note" -> READ_NOTE
-                "list_folders" -> LIST_FOLDERS
-                "create_note" -> CREATE_NOTE
-                "append_to_note" -> APPEND_TO_NOTE
-                "create_folder" -> CREATE_FOLDER
-                "set_reminder" -> SET_REMINDER
-                "update_note" -> UPDATE_NOTE
-                "move_note" -> MOVE_NOTE
-                "tag_note" -> TAG_NOTE
-                "trash_note" -> TRASH_NOTE
-                "merge_notes" -> MERGE_NOTES
-                else -> null
-            }
+        fun fromToolName(name: String): WriteToolName? {
+            val key = name.trim().uppercase()
+            return runCatching { enumValueOf<WriteToolName>(key) }.getOrNull()
+        }
     }
 }
 
