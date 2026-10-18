@@ -20,6 +20,19 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -27,11 +40,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,16 +52,19 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,20 +82,22 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -100,9 +116,16 @@ import com.locus.core.domain.routing.ModelRef
 import kotlinx.coroutines.launch
 
 private const val MIN_SCROLLBAR_THUMB_HEIGHT_PX = 40f
-private const val CORNER_RADIUS = 16
+private const val CORNER_RADIUS = 20
 private const val SMALL_CORNER_RADIUS = 4
 private const val BANNER_CORNER_RADIUS = 8
+private const val TYPING_DOT_COUNT = 3
+private const val TYPING_DOT_SIZE = 8
+private const val TYPING_DOT_PERIOD_MS = 600
+private const val ACTION_SWAP_FADE_MS = 150
+private const val SHORT_FADE_MS = 150
+private const val EMPTY_STATE_ICON_CIRCLE = 72
+private const val EMPTY_STATE_ICON_SIZE = 36
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
@@ -279,6 +302,9 @@ fun ChatScreen(
                 SessionListSheetActions(
                     onSelectSession = { viewModel.selectSession(it) },
                     onCreateNewSession = { viewModel.createNewSession() },
+                    onDeleteSession = { viewModel.deleteSession(it) },
+                    onDeleteSessions = { viewModel.deleteSessions(it) },
+                    onDeleteAllSessions = { viewModel.deleteAllSessions() },
                     onDismiss = { showSessionSheet = false },
                 ),
         )
@@ -355,23 +381,13 @@ private fun ChatTopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ActiveModelIndicator(
-                        activeModel = activeModel,
-                        onClick = actions.onModelClick,
-                    )
-                    if (activeModel.isLocal) {
-                        ReloadLocalModelChip(
-                            isReloadingModel = isReloadingModel,
-                            onClick = actions.onReloadLocalModel,
-                        )
-                    }
-                }
+                ActiveModelIndicator(
+                    activeModel = activeModel,
+                    onClick = actions.onModelClick,
+                )
             }
         },
         navigationIcon = {
@@ -414,49 +430,6 @@ private fun ChatTopBar(
             }
         },
     )
-}
-
-@Composable
-private fun ReloadLocalModelChip(
-    isReloadingModel: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        modifier =
-            Modifier
-                .testTag("reload_local_model_chip")
-                .clickable(
-                    enabled = !isReloadingModel,
-                    onClick = onClick,
-                ),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isReloadingModel) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = stringResource(R.string.chat_reload_local_model),
-                    modifier = Modifier.size(12.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                text = stringResource(R.string.chat_reload_chip_label),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
 }
 
 @Composable
@@ -511,38 +484,55 @@ private fun MessageList(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val imeInsets = WindowInsets.ime
-    val density = LocalDensity.current
-    val imeBottom = imeInsets.getBottom(density)
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(messages.size, streamingText, imeBottom) {
-        val totalCount = messages.size + if (streamingText != null) 1 else 0
-        if (totalCount > 0) {
-            listState.animateScrollToItem(totalCount - 1)
-        }
+    // Keep the newest message visible on arrival, but only while the user was already
+    // reading the bottom — never yank them out of history.
+    var wasAtBottom by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.canScrollForward }
+            .collect { canScrollForward -> wasAtBottom = !canScrollForward }
     }
+    LaunchedEffect(messages.size) {
+        if (wasAtBottom) listState.scrollToItem(0)
+    }
+
     if (messages.isEmpty() && streamingText == null) {
         EmptyChatPlaceholder(modifier = modifier)
     } else {
-        LazyColumn(
-            state = listState,
-            modifier = modifier.padding(horizontal = 8.dp).verticalScrollbar(listState),
-        ) {
-            items(messages, key = { it.id }) { message ->
-                when (message.role) {
-                    ChatRole.USER -> UserMessageBubble(message = message)
-                    ChatRole.ASSISTANT ->
-                        AssistantMessageBubble(
-                            message = message,
-                            onSourceClick = onSourceClick,
-                            onPinAsNote = { onPinAsNote(message) },
-                        )
-                    ChatRole.SYSTEM -> {}
+        Box(modifier = modifier) {
+            // reverseLayout anchors newest content (and the streaming bubble) to the bottom,
+            // so new tokens/messages appear in place without manual scroll handling.
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).verticalScrollbar(listState),
+                reverseLayout = true,
+            ) {
+                if (streamingText != null) {
+                    item(key = "streaming_bubble") { StreamingMessageBubble(text = streamingText) }
+                }
+                items(messages.asReversed(), key = { it.id }) { message ->
+                    when (message.role) {
+                        ChatRole.USER -> UserMessageBubble(message = message)
+                        ChatRole.ASSISTANT ->
+                            AssistantMessageBubble(
+                                message = message,
+                                onSourceClick = onSourceClick,
+                                onPinAsNote = { onPinAsNote(message) },
+                            )
+                        ChatRole.SYSTEM -> {}
+                    }
                 }
             }
-            if (streamingText != null) {
-                item(key = "streaming_bubble") { StreamingMessageBubble(text = streamingText) }
-            }
+            val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
+            JumpToBottomButton(
+                visible = canScrollDown,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
         }
     }
 }
@@ -668,7 +658,7 @@ private fun StreamingMessageBubble(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.CenterStart,
     ) {
         Surface(
@@ -681,24 +671,48 @@ private fun StreamingMessageBubble(
                     bottomEnd = CORNER_RADIUS.dp,
                 ),
         ) {
-            Row(
+            Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (text.isEmpty()) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "…",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    TypingIndicator()
                 } else {
                     MarkdownContent(
                         body = text,
                     )
                 }
             }
+        }
+    }
+}
+
+/** Three dots pulsing in sequence, shown while the model starts generating. */
+@Composable
+private fun TypingIndicator(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(TYPING_DOT_COUNT) { index ->
+            val transition = rememberInfiniteTransition(label = "typing_dot")
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(TYPING_DOT_PERIOD_MS, delayMillis = index * TYPING_DOT_PERIOD_MS),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "typing_alpha",
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(TYPING_DOT_SIZE.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)),
+            )
         }
     }
 }
@@ -719,7 +733,7 @@ private fun ChatInputBar(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
             OutlinedTextField(
                 value = inputText,
@@ -727,33 +741,58 @@ private fun ChatInputBar(
                 placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
                 modifier = Modifier.weight(1f),
                 maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            if (isStreaming) {
-                IconButton(
-                    onClick = onStop,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_stop),
-                        contentDescription = stringResource(R.string.chat_stop_generation),
-                        tint = MaterialTheme.colorScheme.error,
+            AnimatedContent(
+                targetState = isStreaming,
+                transitionSpec = {
+                    fadeIn(tween(ACTION_SWAP_FADE_MS)) togetherWith fadeOut(tween(ACTION_SWAP_FADE_MS))
+                },
+                label = "chat_action_button",
+            ) { streaming ->
+                val actionContentDescription =
+                    stringResource(
+                        if (streaming) R.string.chat_stop_generation else R.string.chat_send,
                     )
-                }
-            } else {
-                IconButton(
-                    onClick = onSend,
-                    enabled = inputText.isNotBlank(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_send),
-                        contentDescription = stringResource(R.string.chat_send),
-                        tint =
-                            if (inputText.isNotBlank()) {
+                if (streaming) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        onClick = onStop,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_stop),
+                            contentDescription = actionContentDescription,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(14.dp).size(24.dp),
+                        )
+                    }
+                } else {
+                    val canSend = inputText.isNotBlank()
+                    Surface(
+                        shape = CircleShape,
+                        color =
+                            if (canSend) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                MaterialTheme.colorScheme.surfaceVariant
                             },
-                    )
+                        onClick = onSend,
+                        enabled = canSend,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_send),
+                            contentDescription = actionContentDescription,
+                            tint =
+                                if (canSend) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            modifier = Modifier.padding(14.dp).size(24.dp),
+                        )
+                    }
                 }
             }
         }
@@ -770,12 +809,21 @@ private fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 32.dp),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_chat),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(EMPTY_STATE_ICON_CIRCLE.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_chat),
+                    contentDescription = null,
+                    modifier = Modifier.size(EMPTY_STATE_ICON_SIZE.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = stringResource(R.string.chat_empty_title),
@@ -787,6 +835,32 @@ private fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
                 text = stringResource(R.string.chat_empty_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Small circular FAB that appears when the list is scrolled up from the bottom. */
+@Composable
+private fun JumpToBottomButton(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(SHORT_FADE_MS)) + scaleIn(tween(SHORT_FADE_MS)),
+        exit = fadeOut(tween(SHORT_FADE_MS)) + scaleOut(tween(SHORT_FADE_MS)),
+        modifier = modifier,
+    ) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.chat_jump_to_bottom),
             )
         }
     }

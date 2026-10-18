@@ -182,8 +182,17 @@ open class LlamaRuntime(
                     }
                     withContext(Dispatchers.IO) {
                         if (isNativeLibraryLoaded) {
+                            val buffer = StringBuilder()
+                            var stopped = false
                             val callback =
                                 TokenCallback { token ->
+                                    if (stopped || !isActive) return@TokenCallback false
+                                    buffer.append(token)
+                                    val currentText = buffer.toString()
+                                    if (currentText.contains("\nUser:") || currentText.contains("\nAssistant:")) {
+                                        stopped = true
+                                        return@TokenCallback false
+                                    }
                                     val result = trySend(token)
                                     result.isSuccess && isActive
                                 }

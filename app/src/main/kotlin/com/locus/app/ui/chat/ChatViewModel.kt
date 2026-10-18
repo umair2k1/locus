@@ -18,10 +18,13 @@ package com.locus.app.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.locus.core.domain.agent.AgentToolLoopRunner
+import com.locus.core.domain.agent.SafetyDecision
 import com.locus.core.domain.chat.ChatMessage
 import com.locus.core.domain.chat.ChatRepository
 import com.locus.core.domain.chat.ChatRole
 import com.locus.core.domain.chat.ChatSession
+import com.locus.core.domain.chat.CitedSource
 import com.locus.core.domain.chat.RagAnswerUseCase
 import com.locus.core.domain.chat.ThermalMonitor
 import com.locus.core.domain.models.ModelManagerRepository
@@ -31,6 +34,7 @@ import com.locus.core.domain.notes.Note
 import com.locus.core.domain.notes.NoteRepository
 import com.locus.core.domain.notes.NoteType
 import com.locus.core.domain.notes.UuidV7
+import com.locus.core.domain.providers.ProviderAdapter
 import com.locus.core.domain.providers.ProviderMessage
 import com.locus.core.domain.providers.ProviderRole
 import com.locus.core.domain.routing.ModelRef
@@ -52,6 +56,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -60,7 +65,8 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private const val MAX_SESSION_NAME_LENGTH = 30
-private const val SESSION_NAME_ELLIPSIS_LIMIT = 27
+private const val MIN_PREFIX_REMAINDER = 3
+private const val MIN_TRUNCATED_WORD_BREAK = 15
 private const val MAX_TITLE_LENGTH = 50
 private const val TITLE_ELLIPSIS_LIMIT = 47
 private const val STOP_TIMEOUT_MILLIS = 5_000L
@@ -109,6 +115,8 @@ class ChatViewModel
         private val renderTemplateUseCase: RenderTemplateUseCase? = null,
         private val networkSettingsStore: NetworkSettingsStore? = null,
         private val modelManagerRepository: ModelManagerRepository? = null,
+        private val agentToolLoopRunner: AgentToolLoopRunner? = null,
+        private val providerAdapter: ProviderAdapter? = null,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ChatUiState())
         val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -507,6 +515,47 @@ class ChatViewModel
             }
         }
 
+        fun deleteSession(sessionId: String) {
+            viewModelScope.launch(dispatchers.io) {
+                chatRepository.deleteSession(sessionId)
+                sessionModelOverrides.remove(sessionId)
+                sessionConfirmedModels.remove(sessionId)
+                if (_uiState.value.activeSessionId == sessionId) {
+                    val remaining = _uiState.value.sessions.filter { it.id != sessionId }
+                    val nextSessionId = remaining.firstOrNull()?.id
+                    _uiState.update { it.copy(activeSessionId = nextSessionId) }
+                    updateMessagesObservation(nextSessionId)
+                }
+            }
+        }
+
+        fun deleteSessions(sessionIds: Set<String>) {
+            if (sessionIds.isEmpty()) return
+            viewModelScope.launch(dispatchers.io) {
+                chatRepository.deleteSessions(sessionIds.toList())
+                sessionIds.forEach {
+                    sessionModelOverrides.remove(it)
+                    sessionConfirmedModels.remove(it)
+                }
+                if (_uiState.value.activeSessionId in sessionIds) {
+                    val remaining = _uiState.value.sessions.filter { it.id !in sessionIds }
+                    val nextSessionId = remaining.firstOrNull()?.id
+                    _uiState.update { it.copy(activeSessionId = nextSessionId) }
+                    updateMessagesObservation(nextSessionId)
+                }
+            }
+        }
+
+        fun deleteAllSessions() {
+            viewModelScope.launch(dispatchers.io) {
+                chatRepository.deleteAllSessions()
+                sessionModelOverrides.clear()
+                sessionConfirmedModels.clear()
+                _uiState.update { it.copy(activeSessionId = null, messages = emptyList()) }
+                updateMessagesObservation(null)
+            }
+        }
+
         fun sendMessage(content: String) {
             val trimmed = content.trim()
             val isGenerating = _uiState.value.streamingText != null
@@ -604,15 +653,22 @@ class ChatViewModel
         private fun executeSend(trimmed: String) {
             generationJob =
                 viewModelScope.launch(dispatchers.io) {
+                    val currentSession =
+                        _uiState.value.sessions.firstOrNull { it.id == _uiState.value.activeSessionId }
                     val sessionId =
-                        _uiState.value.activeSessionId
-                            ?: run {
-                                val sessionName = deriveSessionName(trimmed)
-                                val newSession = chatRepository.createSession(sessionName)
-                                _uiState.update { it.copy(activeSessionId = newSession.id) }
-                                updateMessagesObservation(newSession.id)
-                                newSession.id
+                        if (currentSession != null) {
+                            if (currentSession.name == "New Chat" || _uiState.value.messages.isEmpty()) {
+                                val derivedTitle = deriveSessionName(trimmed)
+                                chatRepository.updateSessionName(currentSession.id, derivedTitle)
                             }
+                            currentSession.id
+                        } else {
+                            val sessionName = deriveSessionName(trimmed)
+                            val newSession = chatRepository.createSession(sessionName)
+                            _uiState.update { it.copy(activeSessionId = newSession.id) }
+                            updateMessagesObservation(newSession.id)
+                            newSession.id
+                        }
 
                     val priorHistory =
                         _uiState.value.messages.map { msg ->
@@ -642,7 +698,7 @@ class ChatViewModel
                 }
         }
 
-        @Suppress("TooGenericExceptionCaught")
+        @Suppress("TooGenericExceptionCaught", "LongMethod")
         private suspend fun executeStreamingQuery(
             sessionId: String,
             query: String,
@@ -650,25 +706,54 @@ class ChatViewModel
         ) {
             _uiState.update { it.copy(streamingText = "") }
             try {
-                val answer =
-                    ragAnswerUseCase(
-                        query = query,
-                        history = history,
-                        onTokenDelta = { delta ->
-                            _uiState.update { current ->
-                                current.copy(
-                                    streamingText = (current.streamingText ?: "") + delta,
-                                )
-                            }
-                        },
-                    )
+                val isCloudDisabled = networkSettingsStore?.isCloudDisabled?.firstOrNull() ?: false
+                val isLocalActive = activeModelRepository.getActiveModel().isLocal
+                val useLocalModel = isCloudDisabled || isLocalActive
+
+                val isAction = isActionQuery(query)
+                var responseText = ""
+                var sources: List<CitedSource> = emptyList()
+
+                if (isAction && agentToolLoopRunner != null && !useLocalModel) {
+                    val cleaned = cleanQuery(query)
+                    responseText =
+                        agentToolLoopRunner.run(
+                            userMessage = cleaned,
+                            adapter = providerAdapter,
+                            coordinator = coordinator,
+                            history = history,
+                            systemPrompt = AGENT_SYSTEM_PROMPT,
+                            onTokenDelta = { delta ->
+                                _uiState.update { current ->
+                                    current.copy(
+                                        streamingText = (current.streamingText ?: "") + delta,
+                                    )
+                                }
+                            },
+                        )
+                } else {
+                    val answer =
+                        ragAnswerUseCase(
+                            query = query,
+                            history = history,
+                            onTokenDelta = { delta ->
+                                _uiState.update { current ->
+                                    current.copy(
+                                        streamingText = (current.streamingText ?: "") + delta,
+                                    )
+                                }
+                            },
+                        )
+                    responseText = answer.text
+                    sources = answer.sources
+                }
                 val assistantMsg =
                     ChatMessage(
                         id = UuidV7.generate(clock),
                         sessionId = sessionId,
                         role = ChatRole.ASSISTANT,
-                        content = answer.text,
-                        citations = answer.sources,
+                        content = responseText,
+                        citations = sources,
                         timestamp = clock.now(),
                     )
                 chatRepository.appendMessage(sessionId, assistantMsg)
@@ -743,13 +828,62 @@ class ChatViewModel
         }
 
         private fun deriveSessionName(content: String): String {
-            val firstLine = content.lines().firstOrNull { it.isNotBlank() }?.trim() ?: "New Chat"
-            val clean = firstLine.removePrefix("#").trim()
-            return if (clean.length > MAX_SESSION_NAME_LENGTH) {
-                clean.take(SESSION_NAME_ELLIPSIS_LIMIT) + "…"
-            } else {
-                clean.ifBlank { "New Chat" }
+            val firstLine = content.lines().firstOrNull { it.isNotBlank() }?.trim() ?: return "New Chat"
+            var clean =
+                firstLine
+                    .removePrefix("#")
+                    .removePrefix("-")
+                    .removePrefix("*")
+                    .trim()
+                    .trim('`', '"', '\'', '?', '!', '.', ',')
+
+            val lower = clean.lowercase()
+            val prefixes =
+                listOf(
+                    "can you please tell me about ",
+                    "can you please tell me ",
+                    "can you please give me ",
+                    "can you please ",
+                    "please tell me about ",
+                    "please tell me ",
+                    "please write ",
+                    "please give me ",
+                    "tell me about ",
+                    "tell me ",
+                    "what is the ",
+                    "what are the ",
+                    "what is ",
+                    "what are ",
+                    "how do i ",
+                    "how to ",
+                    "who is ",
+                    "who was ",
+                    "explain how ",
+                    "explain ",
+                    "write a ",
+                    "write an ",
+                    "write ",
+                )
+            for (prefix in prefixes) {
+                if (lower.startsWith(prefix) && clean.length > prefix.length + MIN_PREFIX_REMAINDER) {
+                    clean = clean.substring(prefix.length).trim()
+                    break
+                }
             }
+
+            clean = clean.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+            return if (clean.length > MAX_SESSION_NAME_LENGTH) {
+                val truncated = clean.take(MAX_SESSION_NAME_LENGTH)
+                val lastSpace = truncated.lastIndexOf(' ')
+                if (lastSpace in MIN_TRUNCATED_WORD_BREAK..MAX_SESSION_NAME_LENGTH) {
+                    truncated.substring(0, lastSpace).trimEnd()
+                } else {
+                    truncated.trimEnd()
+                }
+            } else {
+                clean
+            }.ifBlank { "New Chat" }
         }
 
         private fun deriveTitle(content: String): String {
@@ -770,6 +904,17 @@ class ChatViewModel
                     deferred.await()
                 } finally {
                     _pendingConfirmation.value = null
+                }
+            }
+            coordinator?.setWriteActionListener { entry, decision ->
+                if (decision is SafetyDecision.AutoRunWithUndo) {
+                    _undoableAction.value =
+                        UndoableAction(
+                            entryId = entry.id,
+                            toolName = entry.toolName,
+                            diff = entry.diff,
+                            affectedNotes = entry.affectedNoteIds,
+                        )
                 }
             }
         }
@@ -798,4 +943,94 @@ class ChatViewModel
             renderTemplateUseCase?.render(
                 template.templateBody,
             ) ?: template.templateBody
+
+        internal fun isActionQuery(query: String): Boolean {
+            val q = query.trim().lowercase()
+            val isCommand = SLASH_COMMANDS.any { q.startsWith(it) }
+            val hasActionPhrase = ACTION_PHRASES.any { q.contains(it) }
+            val hasImperativePrefix = IMPERATIVE_PREFIXES.any { q.startsWith(it) }
+            return isCommand || hasActionPhrase || hasImperativePrefix
+        }
+
+        private fun cleanQuery(query: String): String {
+            val trimmed = query.trim()
+            val matchedCmd = SLASH_COMMANDS.firstOrNull { trimmed.startsWith(it, ignoreCase = true) }
+            return if (matchedCmd != null) {
+                trimmed.substring(matchedCmd.length).trim()
+            } else {
+                trimmed
+            }
+        }
     }
+
+private val SLASH_COMMANDS = listOf("/agent", "/action", "/tool", "/do")
+
+private val ACTION_PHRASES =
+    listOf(
+        "create note",
+        "create a note",
+        "make a note",
+        "new note",
+        "take a note",
+        "write a note",
+        "save a note",
+        "save note",
+        "update note",
+        "update the note",
+        "edit note",
+        "edit the note",
+        "modify note",
+        "modify the note",
+        "change note",
+        "append to",
+        "add to note",
+        "add to the note",
+        "add to my note",
+        "append note",
+        "move note",
+        "move the note",
+        "move to folder",
+        "tag note",
+        "tag the note",
+        "add tag",
+        "merge note",
+        "merge notes",
+        "combine notes",
+        "combine the notes",
+        "trash note",
+        "trash the note",
+        "delete note",
+        "delete the note",
+        "remove note",
+        "remove the note",
+        "create folder",
+        "create a folder",
+        "new folder",
+        "make a folder",
+        "set reminder",
+        "set a reminder",
+        "remind me",
+        "set alarm",
+        "set an alarm",
+    )
+
+private val IMPERATIVE_PREFIXES =
+    listOf(
+        "create ",
+        "make ",
+        "delete ",
+        "trash ",
+        "remove ",
+        "append ",
+        "update ",
+        "edit ",
+        "remind ",
+        "merge ",
+        "move ",
+        "tag ",
+    )
+private const val AGENT_SYSTEM_PROMPT =
+    "You are Locus Assistant, a personal notes AI assistant. " +
+        "You have access to tools to create, update, append to, move, tag, merge, and trash notes, " +
+        "as well as list folders and set reminders. " +
+        "When the user asks you to perform an action on their notes, execute the appropriate tool."

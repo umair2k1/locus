@@ -42,10 +42,10 @@ import androidx.compose.ui.unit.dp
 import com.locus.app.R
 import com.locus.core.domain.chat.ActiveModelInfo
 
-private const val CHIP_CORNER_RADIUS_DP = 8
-private const val ICON_SIZE_DP = 14
-private const val HORIZONTAL_PADDING_DP = 8
-private const val VERTICAL_PADDING_DP = 4
+private const val CHIP_CORNER_RADIUS_DP = 6
+private const val ICON_SIZE_DP = 12
+private const val HORIZONTAL_PADDING_DP = 6
+private const val VERTICAL_PADDING_DP = 2
 
 /**
  * SEC-2: Active-model indicator chip displaying the model name and local/cloud icon. "Note content
@@ -87,10 +87,11 @@ fun ActiveModelIndicator(
     onClick: () -> Unit = {},
 ) {
     val visuals = resolveIndicatorVisuals(activeModel.isLocal)
+    val displayName = formatModelDisplayName(activeModel.name)
     val accessibilityDesc =
         stringResource(
             R.string.active_model_desc,
-            activeModel.name,
+            displayName,
             visuals.tierLabel,
         )
 
@@ -121,11 +122,13 @@ fun ActiveModelIndicator(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = activeModel.name,
-                style = MaterialTheme.typography.labelMedium,
+                text = displayName,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
@@ -137,8 +140,16 @@ fun ActiveModelIndicator(
             Text(
                 text = visuals.tierLabel,
                 style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
                 color = visuals.contentColor.copy(alpha = 0.85f),
             )
         }
     }
+}
+
+private fun formatModelDisplayName(name: String): String {
+    val stripped = name.substringAfterLast('/').removeSuffix(".gguf")
+    return stripped.ifBlank { name }
 }

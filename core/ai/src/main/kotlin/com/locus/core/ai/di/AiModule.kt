@@ -32,6 +32,8 @@ import com.locus.core.ai.models.DefaultModelManagerRepository
 import com.locus.core.ai.models.DefaultModelRegistry
 import com.locus.core.ai.providers.GeminiAdapter
 import com.locus.core.ai.providers.OpenAiCompatibleAdapter
+import com.locus.core.ai.toolloop.ToolOrchestrator
+import com.locus.core.domain.agent.AgentToolLoopRunner
 import com.locus.core.domain.chat.ActiveModelRepository
 import com.locus.core.domain.chat.ChatModelClient
 import com.locus.core.domain.chat.RagAnswerUseCase
@@ -66,6 +68,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
@@ -175,9 +178,17 @@ abstract class AiModule {
     @Binds @Singleton
     abstract fun bindThermalMonitor(impl: ThermalMonitor): DomainThermalMonitor
 
+    @Binds
+    @Singleton
+    abstract fun bindAgentToolLoopRunner(impl: ToolOrchestrator): AgentToolLoopRunner
+
     companion object {
         private const val GGUF_EXT = ".gguf"
         private const val TMP_EXT = ".tmp"
+
+        @Provides
+        @Singleton
+        fun provideJson(): Json = Json { ignoreUnknownKeys = true }
 
         @Provides
         @Singleton

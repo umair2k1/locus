@@ -265,6 +265,38 @@ class AgentTurnUiTest {
             assertNull(viewModel.undoableAction.value)
         }
 
+    @Test
+    fun writeAction_autoRunWithUndo_populatesUndoableAction() =
+        runTest(testDispatcher) {
+            val call =
+                PendingToolCall(
+                    tool = WriteToolName.CREATE_NOTE,
+                    origin = CallOrigin.USER_CHAT_INSTRUCTION,
+                    argumentsJson = """{"title": "AutoUndo Note", "body": "content"}""",
+                )
+
+            coordinator.execute(call) {
+                """{"noteId": "new-note-1", "title": "AutoUndo Note"}"""
+            }
+            advanceUntilIdle()
+
+            val action = viewModel.undoableAction.value
+            assertNotNull(action)
+            assertEquals("CREATE_NOTE", action!!.toolName)
+        }
+
+    @Test
+    fun isActionQuery_detectsActionAndIgnoresGeneralChat() {
+        assertTrue(viewModel.isActionQuery("Create a note titled Ideas"))
+        assertTrue(viewModel.isActionQuery("make a note with title Tasks"))
+        assertTrue(viewModel.isActionQuery("add to note note-1"))
+        assertTrue(viewModel.isActionQuery("delete note note-1"))
+        assertTrue(viewModel.isActionQuery("remind me tomorrow to call doctor"))
+        assertTrue(viewModel.isActionQuery("/agent clean up my folders"))
+        assertFalse(viewModel.isActionQuery("What is quantum computing?"))
+        assertFalse(viewModel.isActionQuery("Tell me about my notes on physics"))
+    }
+
     private class FakeAuditJournal : AuditJournal {
         var lastRevertedId: String? = null
 
@@ -319,6 +351,31 @@ class AgentTurnUiTest {
         ) {
             val flow = messagesMap.getOrPut(sessionId) { MutableStateFlow(emptyList()) }
             flow.value = flow.value + message
+        }
+
+        override suspend fun updateSessionName(
+            sessionId: String,
+            name: String,
+        ) {
+            sessionsFlow.value =
+                sessionsFlow.value.map { session ->
+                    if (session.id == sessionId) session.copy(name = name) else session
+                }
+        }
+
+        override suspend fun deleteSession(sessionId: String) {
+            messagesMap.remove(sessionId)
+            sessionsFlow.value = sessionsFlow.value.filter { it.id != sessionId }
+        }
+
+        override suspend fun deleteSessions(sessionIds: List<String>) {
+            sessionIds.forEach { messagesMap.remove(it) }
+            sessionsFlow.value = sessionsFlow.value.filter { it.id !in sessionIds }
+        }
+
+        override suspend fun deleteAllSessions() {
+            messagesMap.clear()
+            sessionsFlow.value = emptyList()
         }
     }
 

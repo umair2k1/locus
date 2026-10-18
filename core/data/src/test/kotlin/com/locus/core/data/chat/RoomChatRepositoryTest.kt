@@ -290,4 +290,51 @@ class RoomChatRepositoryTest {
             assertTrue(repository.observeSessions().first().none { it.id == session.id })
             assertTrue(repository.observeMessages(session.id).first().isEmpty())
         }
+
+    @Test
+    fun updateSessionName_updatesNameAndModifiedAt() =
+        runTest {
+            val session = repository.createSession("Initial Name")
+            clock.currentTime = Instant.ofEpochMilli(1_700_000_050_000L)
+            repository.updateSessionName(session.id, "Updated Name")
+
+            val updated = repository.observeSessions().first().first { it.id == session.id }
+            assertEquals("Updated Name", updated.name)
+            assertEquals(clock.currentTime, updated.modifiedAt)
+        }
+
+    @Test
+    fun deleteSession_viaRepository_removesSessionAndMessages() =
+        runTest {
+            val session = repository.createSession("Session to Delete")
+            repository.appendMessage(
+                session.id,
+                ChatMessage("m1", session.id, ChatRole.USER, "hi", emptyList(), clock.now()),
+            )
+            repository.deleteSession(session.id)
+
+            assertTrue(repository.observeSessions().first().none { it.id == session.id })
+            assertTrue(repository.observeMessages(session.id).first().isEmpty())
+        }
+
+    @Test
+    fun deleteAllSessions_removesAllSessionsAndMessages() =
+        runTest {
+            val s1 = repository.createSession("S1")
+            val s2 = repository.createSession("S2")
+            repository.appendMessage(
+                s1.id,
+                ChatMessage("m1", s1.id, ChatRole.USER, "hi", emptyList(), clock.now()),
+            )
+            repository.appendMessage(
+                s2.id,
+                ChatMessage("m2", s2.id, ChatRole.USER, "hello", emptyList(), clock.now()),
+            )
+
+            repository.deleteAllSessions()
+
+            assertTrue(repository.observeSessions().first().isEmpty())
+            assertTrue(repository.observeMessages(s1.id).first().isEmpty())
+            assertTrue(repository.observeMessages(s2.id).first().isEmpty())
+        }
 }

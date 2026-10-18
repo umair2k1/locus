@@ -231,6 +231,31 @@ class ManualModelOverrideTest {
             val flow = messagesMap.getOrPut(sessionId) { MutableStateFlow(emptyList()) }
             flow.value = flow.value + message
         }
+
+        override suspend fun updateSessionName(
+            sessionId: String,
+            name: String,
+        ) {
+            sessionsFlow.value =
+                sessionsFlow.value.map { session ->
+                    if (session.id == sessionId) session.copy(name = name) else session
+                }
+        }
+
+        override suspend fun deleteSession(sessionId: String) {
+            messagesMap.remove(sessionId)
+            sessionsFlow.value = sessionsFlow.value.filter { it.id != sessionId }
+        }
+
+        override suspend fun deleteSessions(sessionIds: List<String>) {
+            sessionIds.forEach { messagesMap.remove(it) }
+            sessionsFlow.value = sessionsFlow.value.filter { it.id !in sessionIds }
+        }
+
+        override suspend fun deleteAllSessions() {
+            messagesMap.clear()
+            sessionsFlow.value = emptyList()
+        }
     }
 
     private class FakeNoteRepository : NoteRepository {

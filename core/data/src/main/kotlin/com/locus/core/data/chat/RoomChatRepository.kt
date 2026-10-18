@@ -86,6 +86,32 @@ class RoomChatRepository
                 chatDao.appendMessageAndUpdateSession(entity, now)
             }
 
+        override suspend fun updateSessionName(
+            sessionId: String,
+            name: String,
+        ): Unit =
+            withContext(dispatchers.io) {
+                chatDao.updateSessionName(sessionId, name, clock.now())
+            }
+
+        override suspend fun deleteSession(sessionId: String): Unit =
+            withContext(dispatchers.io) {
+                chatDao.deleteSession(sessionId)
+            }
+
+        override suspend fun deleteSessions(sessionIds: List<String>): Unit =
+            withContext(dispatchers.io) {
+                if (sessionIds.isNotEmpty()) {
+                    chatDao.deleteSessions(sessionIds)
+                }
+            }
+
+        override suspend fun deleteAllSessions(): Unit =
+            withContext(dispatchers.io) {
+                chatDao.deleteAllMessages()
+                chatDao.deleteAllSessions()
+            }
+
         private fun ChatSessionEntity.toDomain(): ChatSession =
             ChatSession(
                 id = id,

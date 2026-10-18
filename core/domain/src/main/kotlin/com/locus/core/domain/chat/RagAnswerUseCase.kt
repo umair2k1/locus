@@ -137,7 +137,12 @@ class RagAnswerUseCase(
             }
         }
 
-        val rawAnswer = textBuffer.toString()
+        val rawAnswer =
+            textBuffer
+                .toString()
+                .substringBefore("\nUser:")
+                .substringBefore("\nAssistant:")
+                .trim()
         val maxRange = chunks.size
 
         if (rawAnswer.isBlank()) {
@@ -175,23 +180,23 @@ class RagAnswerUseCase(
     private suspend fun buildSystemPrompt(chunks: List<SearchResult>): String {
         if (chunks.isEmpty()) {
             return """
-                You are an assistant answering questions based on the user's notes.
+                You are a helpful AI assistant in Locus.
+                For general questions, coding, explanations, creative tasks, math, or assistance not dependent on personal notes, answer helpfully, accurately, and directly without refusing.
                 No relevant notes or context chunks were found for this user query.
-                If the user is asking a question about information that would be found in their notes (such as facts, dates, costs, tasks, names, or events), you MUST state clearly and concisely that you could not find any relevant information in their notes.
-                DO NOT guess, fabricate, assume, or invent any numbers, costs, dates, or factual details.
-                If the user is merely greeting you or asking general conversational questions (e.g. 'hello', 'who are you', 'how does this work'), you may respond politely and invite them to ask about their notes.
+                Only if the user is asking specifically about private data, personal records, or information that would be found in their notes (such as personal facts, dates, costs, tasks, names, or events), you MUST state clearly and concisely that you could not find any relevant information in their notes. DO NOT guess, fabricate, assume, or invent any numbers, costs, dates, or factual details about the user's notes.
+                If the user is merely greeting you or asking general conversational questions (e.g. 'hello', 'who are you', 'how does this work'), you may respond politely and invite them to ask about their notes or assist them with their tasks.
                 """.trimIndent()
         }
 
         val instructions =
             """
-            You are an assistant answering questions based strictly on the user's notes.
-            Answer the question using ONLY the provided context chunks below.
-            If the provided context chunks do not contain enough information to answer the question, state that you cannot find this information in the notes. Never make up or infer information not directly supported by the context chunks.
-            Citations are mandatory: every factual claim MUST include an inline citation [n] matching the corresponding context chunk number.
+            You are a helpful AI assistant in Locus. Context chunks from the user's notes are provided below.
+            When answering questions about the user's notes, use the provided context chunks.
+            Citations are mandatory for information derived from the notes: every factual claim based on the notes MUST include an inline citation [n] matching the corresponding context chunk number.
             Only cite numbers that exist in the context list (e.g. [1], [2]). Do not cite numbers outside this range.
+            If the user asks specifically about information in their notes but the provided context chunks do not contain enough information to answer, state that you cannot find this information in the notes. Do not guess or fabricate personal facts or note content.
+            For general knowledge, coding, explanations, or requests not specific to their private notes, answer helpfully and directly using your general capabilities while referencing the context when relevant.
             """.trimIndent()
-
         val context =
             chunks
                 .mapIndexed { index, chunk ->

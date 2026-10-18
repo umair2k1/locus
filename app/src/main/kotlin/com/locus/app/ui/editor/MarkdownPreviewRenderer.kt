@@ -33,7 +33,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -51,11 +55,15 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.locus.app.R
+import kotlinx.coroutines.delay
 
 private val CHECKBOX_LINE_REGEX = Regex("""^\s*[-*+]\s+\[([ xX])\]\s*(.*)$""")
 private val BULLET_LINE_REGEX = Regex("""^\s*[-*+]\s+(.*)$""")
 private val NUMBERED_LINE_REGEX = Regex("""^\s*(\d+\.)\s+(.*)$""")
 private const val LINK_COLOR_VALUE = 0xFF1976D2
+private const val CODE_BLOCK_CORNER = 12
+private const val COPIED_RESET_DELAY_MS = 1500L
 private val LINK_SPAN_STYLE =
     SpanStyle(
         color = Color(LINK_COLOR_VALUE),
@@ -160,6 +168,64 @@ private fun appendStyledText(
     return
 }
 
+/** One renderable markdown block: either a plain text line or a fenced code block. */
+private sealed interface MarkdownSegment
+
+private data class TextLine(
+    val line: String,
+    val lineIndex: Int,
+) : MarkdownSegment
+
+private data class CodeFence(
+    val code: String,
+    val language: String,
+) : MarkdownSegment
+
+private val FENCE_LINE_REGEX = Regex("""^```(?:\s*(\S*))?\s*$""")
+
+/**
+ * Splits the body into text lines and fenced code blocks. An unterminated final fence
+ * (common while streaming) is still rendered as a growing code block.
+ */
+private fun parseMarkdownSegments(body: String): List<MarkdownSegment> {
+    val segments = mutableListOf<MarkdownSegment>()
+    val textLines = mutableListOf<Pair<Int, String>>()
+    var codeLines: MutableList<String>? = null
+    var codeLanguage = ""
+
+    fun flushText() {
+        textLines.forEach { segments.add(TextLine(it.second, it.first)) }
+        textLines.clear()
+    }
+
+    fun flushCode() {
+        codeLines?.let { segments.add(CodeFence(it.joinToString("\n"), codeLanguage)) }
+        codeLines = null
+    }
+
+    body.lines().forEachIndexed { index, line ->
+        val activeCode = codeLines
+        when {
+            activeCode != null && line.trim() == "```" -> flushCode()
+            activeCode != null -> activeCode.add(line)
+            line.startsWith("```") -> {
+                flushText()
+                codeLines = mutableListOf()
+                codeLanguage =
+                    FENCE_LINE_REGEX
+                        .matchEntire(line)
+                        ?.groupValues
+                        ?.get(1)
+                        .orEmpty()
+            }
+            else -> textLines.add(index to line)
+        }
+    }
+    flushCode()
+    flushText()
+    return segments
+}
+
 @Composable
 fun MarkdownPreview(
     body: String,
@@ -167,15 +233,12 @@ fun MarkdownPreview(
     modifier: Modifier = Modifier,
     onNoteClick: ((noteId: String) -> Unit)? = null,
 ) {
-    val lines = body.lines()
-
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        itemsIndexed(lines) { index, line ->
-            MarkdownLineItem(
-                line = line,
-                lineIndex = index,
+        itemsIndexed(parseMarkdownSegments(body)) { _, segment ->
+            MarkdownSegmentItem(
+                segment = segment,
                 onCheckboxToggle = onCheckboxToggle,
                 onNoteClick = onNoteClick,
             )
@@ -193,16 +256,32 @@ fun MarkdownContent(
     onCheckboxToggle: ((lineIndex: Int) -> Unit)? = null,
     onNoteClick: ((noteId: String) -> Unit)? = null,
 ) {
-    val lines = body.lines()
     Column(modifier = modifier) {
-        lines.forEachIndexed { index, line ->
-            MarkdownLineItem(
-                line = line,
-                lineIndex = index,
-                onCheckboxToggle = { onCheckboxToggle?.invoke(it) },
+        parseMarkdownSegments(body).forEach { segment ->
+            MarkdownSegmentItem(
+                segment = segment,
+                onCheckboxToggle = onCheckboxToggle?.let { toggle -> { lineIndex -> toggle(lineIndex) } },
                 onNoteClick = onNoteClick,
             )
         }
+    }
+}
+
+@Composable
+private fun MarkdownSegmentItem(
+    segment: MarkdownSegment,
+    onCheckboxToggle: ((lineIndex: Int) -> Unit)?,
+    onNoteClick: ((noteId: String) -> Unit)?,
+) {
+    when (segment) {
+        is TextLine ->
+            MarkdownLineItem(
+                line = segment.line,
+                lineIndex = segment.lineIndex,
+                onCheckboxToggle = onCheckboxToggle ?: { },
+                onNoteClick = onNoteClick,
+            )
+        is CodeFence -> CodeBlock(code = segment.code, language = segment.language)
     }
 }
 
@@ -235,9 +314,6 @@ private fun MarkdownLineItem(
             val prefix = match.groupValues[1]
             val content = match.groupValues[2]
             NumberedListLine(prefix = prefix, text = content, onNoteClick = onNoteClick)
-        }
-        line.startsWith("```") -> {
-            FencedCodeMarker(marker = line)
         }
         else -> {
             ClickableMarkdownText(
@@ -353,18 +429,56 @@ private fun NumberedListLine(
 }
 
 @Composable
-private fun FencedCodeMarker(marker: String) {
+private fun CodeBlock(
+    code: String,
+    language: String,
+    modifier: Modifier = Modifier,
+) {
+    var copied by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(COPIED_RESET_DELAY_MS)
+            copied = false
+        }
+    }
+
     Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        shape = RoundedCornerShape(CODE_BLOCK_CORNER.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        Text(
-            text = marker,
-            fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = language,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(code))
+                    copied = true
+                }) {
+                    Text(
+                        text = stringResource(if (copied) R.string.chat_code_copied else R.string.chat_copy_code),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+            Text(
+                text = code,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

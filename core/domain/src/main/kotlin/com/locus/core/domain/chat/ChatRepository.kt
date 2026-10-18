@@ -29,4 +29,15 @@ interface ChatRepository {
         sessionId: String,
         message: ChatMessage,
     )
+
+    suspend fun updateSessionName(
+        sessionId: String,
+        name: String,
+    )
+
+    suspend fun deleteSession(sessionId: String)
+
+    suspend fun deleteSessions(sessionIds: List<String>)
+
+    suspend fun deleteAllSessions()
 }

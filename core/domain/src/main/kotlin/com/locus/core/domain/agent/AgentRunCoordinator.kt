@@ -41,6 +41,13 @@ fun interface ConfirmationCallback {
     suspend fun requestConfirmation(request: ConfirmationRequest): Boolean
 }
 
+fun interface WriteActionListener {
+    fun onWriteAction(
+        entry: AuditEntry,
+        decision: SafetyDecision,
+    )
+}
+
 class ToolConfirmationDeniedException(
     message: String = "Tool execution cancelled by user",
 ) : RuntimeException(message)
@@ -66,6 +73,7 @@ class AgentRunCoordinator
         private val safetyClassifier: SafetyTierClassifier = SafetyTierClassifier(),
     ) {
         private var confirmationCallback: ConfirmationCallback? = null
+        private var writeActionListener: WriteActionListener? = null
 
         constructor(
             settingsStore: AgentSettingsStore,
@@ -96,6 +104,10 @@ class AgentRunCoordinator
 
         fun setConfirmationCallback(callback: ConfirmationCallback?) {
             this.confirmationCallback = callback
+        }
+
+        fun setWriteActionListener(listener: WriteActionListener?) {
+            this.writeActionListener = listener
         }
 
         @Suppress("CyclomaticComplexMethod", "ThrowsCount", "LongMethod")
@@ -219,6 +231,7 @@ class AgentRunCoordinator
                         diff = diffText,
                     )
                 auditJournal.record(entry)
+                writeActionListener?.onWriteAction(entry, decision)
             }
 
             return result

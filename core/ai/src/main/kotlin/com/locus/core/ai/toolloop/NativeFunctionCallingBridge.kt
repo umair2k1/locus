@@ -32,6 +32,7 @@ class NativeFunctionCallingBridge(
     private val adapter: ProviderAdapter,
     private val tools: List<ToolExecutor>,
     private val maxIterations: Int = 8,
+    private val onTokenDelta: ((String) -> Unit)? = null,
 ) {
     private val toolsByName = tools.associateBy { it.schema.name }
     private val domainTools =
@@ -43,19 +44,27 @@ class NativeFunctionCallingBridge(
             )
         }
 
-    suspend fun run(userMessage: String): String {
-        val messages =
-            mutableListOf(
-                ProviderMessage(role = ProviderRole.USER, content = userMessage),
-            )
-
+    suspend fun run(
+        userMessage: String,
+        history: List<ProviderMessage> = emptyList(),
+        systemPrompt: String? = null,
+    ): String {
+        val messages = mutableListOf<ProviderMessage>()
+        if (!systemPrompt.isNullOrBlank()) {
+            messages += ProviderMessage(role = ProviderRole.SYSTEM, content = systemPrompt)
+        }
+        messages.addAll(history)
+        messages += ProviderMessage(role = ProviderRole.USER, content = userMessage)
         repeat(maxIterations) {
             val assistantText = StringBuilder()
             val toolCallsByIndex = mutableMapOf<Int, AccumulatedToolCall>()
 
             adapter.streamChat(messages, domainTools).collect { event ->
                 when (event) {
-                    is StreamEvent.TokenDelta -> assistantText.append(event.text)
+                    is StreamEvent.TokenDelta -> {
+                        assistantText.append(event.text)
+                        onTokenDelta?.invoke(event.text)
+                    }
                     is StreamEvent.ToolCallDelta -> {
                         val tc = toolCallsByIndex.getOrPut(event.index) { AccumulatedToolCall(index = event.index) }
                         if (!event.id.isNullOrBlank()) tc.id = event.id

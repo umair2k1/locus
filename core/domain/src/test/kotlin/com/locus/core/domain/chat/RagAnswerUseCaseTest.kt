@@ -43,6 +43,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("LargeClass")
 class RagAnswerUseCaseTest {
     private class FakeProviderAdapter(
         private val eventsProvider: (List<ProviderMessage>) -> List<StreamEvent>,
@@ -840,5 +841,69 @@ class RagAnswerUseCaseTest {
             assertEquals(1, answer.sources.size)
             assertEquals("note-fuel", answer.sources[0].noteId)
             assertTrue(answer.text.contains("[1]"))
+        }
+
+    @Test
+    fun ragAnswerUseCase_whenGeneralQueryReturnsZeroChunks_systemPromptPermitsGeneralAndCodingAssistance() =
+        runTest {
+            var capturedSystemPrompt: String? = null
+            val adapter =
+                FakeProviderAdapter { messages ->
+                    capturedSystemPrompt = messages.firstOrNull { it.role == ProviderRole.SYSTEM }?.content
+                    listOf(
+                        StreamEvent.TokenDelta("```csharp\nConsole.WriteLine(\"Hello, World!\");\n```"),
+                        StreamEvent.Done(),
+                    )
+                }
+            val hybridSearch =
+                HybridSearchUseCase(
+                    keywordSearch = FakeKeywordSearch(emptyList()),
+                    chunkRepository = UnavailableChunkRepository(),
+                    embeddingGateway = DummyEmbeddingGateway(),
+                )
+            val useCase = RagAnswerUseCase(hybridSearch = hybridSearch, providerAdapter = adapter)
+
+            val answer = useCase(query = "write hello world code in c#")
+
+            assertTrue(
+                "System prompt must permit answering general and coding questions directly",
+                capturedSystemPrompt?.contains("For general questions, coding, explanations") == true,
+            )
+            assertTrue(answer.sources.isEmpty())
+            assertTrue(answer.text.contains("Console.WriteLine"))
+        }
+
+    @Test
+    fun ragAnswerUseCase_whenChunksPresent_systemPromptPermitsGeneralCapabilitiesAlongsideContext() =
+        runTest {
+            val chunk =
+                SearchResult(
+                    noteId = "note-sample",
+                    title = "Sample Note",
+                    snippet = "Just some sample content.",
+                )
+            var capturedSystemPrompt: String? = null
+            val adapter =
+                FakeProviderAdapter { messages ->
+                    capturedSystemPrompt = messages.firstOrNull { it.role == ProviderRole.SYSTEM }?.content
+                    listOf(
+                        StreamEvent.TokenDelta("Here is the answer [1]"),
+                        StreamEvent.Done(),
+                    )
+                }
+            val hybridSearch =
+                HybridSearchUseCase(
+                    keywordSearch = FakeKeywordSearch(listOf(chunk)),
+                    chunkRepository = UnavailableChunkRepository(),
+                    embeddingGateway = DummyEmbeddingGateway(),
+                )
+            val useCase = RagAnswerUseCase(hybridSearch = hybridSearch, providerAdapter = adapter)
+
+            useCase(query = "explain recursion and check sample note")
+
+            assertTrue(
+                "System prompt must permit general capabilities alongside note context",
+                capturedSystemPrompt?.contains("For general knowledge, coding, explanations") == true,
+            )
         }
 }

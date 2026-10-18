@@ -29,6 +29,7 @@ import com.locus.core.ai.tools.TagNoteTool
 import com.locus.core.ai.tools.TrashNoteTool
 import com.locus.core.ai.tools.UpdateNoteTool
 import com.locus.core.domain.agent.AgentRunCoordinator
+import com.locus.core.domain.agent.AgentToolLoopRunner
 import com.locus.core.domain.agent.CallOrigin
 import com.locus.core.domain.agent.PendingToolCall
 import com.locus.core.domain.agent.WriteToolName
@@ -51,9 +52,45 @@ class ToolOrchestrator(
     private val agentRunCoordinator: AgentRunCoordinator? = null,
     private val defaultAdapter: ProviderAdapter? = null,
     private val maxIterations: Int = 8,
-) {
+) : AgentToolLoopRunner {
     @Suppress("LongParameterList")
     @Inject
+    constructor(
+        searchNotesTool: SearchNotesTool,
+        readNoteTool: ReadNoteTool,
+        listFoldersTool: ListFoldersTool,
+        createNoteTool: CreateNoteTool,
+        updateNoteTool: UpdateNoteTool,
+        appendToNoteTool: AppendToNoteTool,
+        moveNoteTool: MoveNoteTool,
+        tagNoteTool: TagNoteTool,
+        mergeNotesTool: MergeNotesTool,
+        trashNoteTool: TrashNoteTool,
+        createFolderTool: CreateFolderTool,
+        setReminderTool: SetReminderTool,
+        agentRunCoordinator: AgentRunCoordinator,
+        providerAdapter: ProviderAdapter,
+    ) : this(
+        tools =
+            listOf(
+                searchNotesTool,
+                readNoteTool,
+                listFoldersTool,
+                createNoteTool,
+                updateNoteTool,
+                appendToNoteTool,
+                moveNoteTool,
+                tagNoteTool,
+                mergeNotesTool,
+                trashNoteTool,
+                createFolderTool,
+                setReminderTool,
+            ),
+        agentRunCoordinator = agentRunCoordinator,
+        defaultAdapter = providerAdapter,
+    )
+
+    @Suppress("LongParameterList")
     constructor(
         searchNotesTool: SearchNotesTool,
         readNoteTool: ReadNoteTool,
@@ -85,6 +122,7 @@ class ToolOrchestrator(
                 setReminderTool,
             ),
         agentRunCoordinator = agentRunCoordinator,
+        defaultAdapter = null,
     )
 
     constructor(
@@ -96,13 +134,18 @@ class ToolOrchestrator(
         agentRunCoordinator = null,
     )
 
-    suspend fun run(
+    @Suppress("LongParameterList")
+    override suspend fun run(
         userMessage: String,
-        adapter: ProviderAdapter? = defaultAdapter,
-        coordinator: AgentRunCoordinator? = agentRunCoordinator,
+        adapter: ProviderAdapter?,
+        coordinator: AgentRunCoordinator?,
+        history: List<ProviderMessage>,
+        systemPrompt: String?,
+        onTokenDelta: ((String) -> Unit)?,
     ): String {
         val activeAdapter =
             adapter
+                ?: defaultAdapter
                 ?: throw IllegalArgumentException(
                     "ProviderAdapter must be provided to ToolOrchestrator",
                 )
@@ -111,7 +154,16 @@ class ToolOrchestrator(
         val coordinatedTools = coordinateTools(coordinator)
 
         return if (activeAdapter.capabilities.supportsNativeTools) {
-            NativeFunctionCallingBridge(activeAdapter, coordinatedTools, maxIterations).run(userMessage)
+            NativeFunctionCallingBridge(
+                adapter = activeAdapter,
+                tools = coordinatedTools,
+                maxIterations = maxIterations,
+                onTokenDelta = onTokenDelta,
+            ).run(
+                userMessage = userMessage,
+                history = history,
+                systemPrompt = systemPrompt,
+            )
         } else {
             val client = AdapterJsonModeClient(activeAdapter)
             JsonModeToolLoop(client, coordinatedTools, maxIterations = maxIterations).run(userMessage)

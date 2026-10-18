@@ -626,6 +626,118 @@ class ChatViewModelTest {
             assertFalse(vm.uiState.value.isReloadingModel)
         }
 
+    @Test
+    fun sendMessage_inNewChatSession_autoNamesSessionBasedOnSummary() =
+        runTest(testDispatcher) {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.createNewSession("New Chat")
+            advanceUntilIdle()
+            val activeId = vm.uiState.value.activeSessionId
+            assertEquals(
+                "New Chat",
+                vm.uiState.value.sessions
+                    .first { it.id == activeId }
+                    .name,
+            )
+
+            vm.sendMessage("what is the capital of France?")
+            advanceUntilIdle()
+
+            val updatedSession =
+                vm.uiState.value.sessions
+                    .first { it.id == activeId }
+            assertEquals("Capital of France", updatedSession.name)
+        }
+
+    @Test
+    fun deleteSession_removesSessionAndSwitchesActiveSession() =
+        runTest(testDispatcher) {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.createNewSession("Session 1")
+            advanceUntilIdle()
+            val s1Id = vm.uiState.value.activeSessionId!!
+
+            vm.createNewSession("Session 2")
+            advanceUntilIdle()
+            val s2Id = vm.uiState.value.activeSessionId!!
+
+            assertEquals(2, vm.uiState.value.sessions.size)
+            assertEquals(s2Id, vm.uiState.value.activeSessionId)
+
+            vm.deleteSession(s2Id)
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.sessions.size)
+            assertEquals(s1Id, vm.uiState.value.activeSessionId)
+            assertTrue(
+                vm.uiState.value.sessions
+                    .none { it.id == s2Id },
+            )
+        }
+
+    @Test
+    fun deleteSessions_removesSpecifiedSessions() =
+        runTest(testDispatcher) {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.createNewSession("Session A")
+            advanceUntilIdle()
+            val sAId = vm.uiState.value.activeSessionId!!
+
+            vm.createNewSession("Session B")
+            advanceUntilIdle()
+            val sBId = vm.uiState.value.activeSessionId!!
+
+            vm.createNewSession("Session C")
+            advanceUntilIdle()
+            val sCId = vm.uiState.value.activeSessionId!!
+
+            assertEquals(3, vm.uiState.value.sessions.size)
+
+            vm.deleteSessions(setOf(sBId, sCId))
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.sessions.size)
+            assertEquals(
+                sAId,
+                vm.uiState.value.sessions
+                    .first()
+                    .id,
+            )
+            assertEquals(sAId, vm.uiState.value.activeSessionId)
+        }
+
+    @Test
+    fun deleteAllSessions_clearsAllSessionsAndMessages() =
+        runTest(testDispatcher) {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.createNewSession("Session 1")
+            advanceUntilIdle()
+            vm.createNewSession("Session 2")
+            advanceUntilIdle()
+            assertEquals(2, vm.uiState.value.sessions.size)
+
+            vm.deleteAllSessions()
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.sessions
+                    .isEmpty(),
+            )
+            assertNull(vm.uiState.value.activeSessionId)
+            assertTrue(
+                vm.uiState.value.messages
+                    .isEmpty(),
+            )
+        }
+
     // --- Fakes ---
     private class FakeThermalMonitor(
         initialThrottling: Boolean = false,
@@ -715,6 +827,36 @@ class ChatViewModelTest {
                             session
                         }
                     }.sortedByDescending { it.modifiedAt }
+        }
+
+        override suspend fun updateSessionName(
+            sessionId: String,
+            name: String,
+        ) {
+            val now = clock.now()
+            sessionsFlow.value =
+                sessionsFlow.value.map { session ->
+                    if (session.id == sessionId) {
+                        session.copy(name = name, modifiedAt = now)
+                    } else {
+                        session
+                    }
+                }
+        }
+
+        override suspend fun deleteSession(sessionId: String) {
+            messagesMap.remove(sessionId)
+            sessionsFlow.value = sessionsFlow.value.filter { it.id != sessionId }
+        }
+
+        override suspend fun deleteSessions(sessionIds: List<String>) {
+            sessionIds.forEach { messagesMap.remove(it) }
+            sessionsFlow.value = sessionsFlow.value.filter { it.id !in sessionIds }
+        }
+
+        override suspend fun deleteAllSessions() {
+            messagesMap.clear()
+            sessionsFlow.value = emptyList()
         }
     }
 
