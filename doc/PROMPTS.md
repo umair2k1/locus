@@ -3346,9 +3346,10 @@ rows; the §13 grep returns zero hits.
 3. Create `doc/DECISIONS.md` with just a title heading (`# Locus — Decisions Log`); Prompt 2 appends the
    real format and first entry.
 4. On GitHub: create the repository, set the default branch, and (before Prompt 55's discovery bot can be
-   meaningfully verified) enable branch protection requiring review on `catalog/` per CODEOWNERS — this is
-   a one-time repo-settings step outside the agent's reach; fill in the real maintainer GitHub handle in
-   `.github/CODEOWNERS` when Prompt 55 runs.
+   meaningfully verified) enable branch protection requiring review on `catalog/` per CODEOWNERS, and enable
+   "Allow GitHub Actions to create and approve pull requests" under Repository Settings -> Actions -> General
+   (Workflow permissions) — these are one-time repo-settings steps; fill in the real maintainer GitHub handle
+   in `.github/CODEOWNERS` when Prompt 55 runs.
 
 **Run order:** paste PROMPT 1 into a fresh coding-agent session. On success, `git add -A && git commit -m
 "<the prompt's commit message>"`. Open a new fresh session, paste PROMPT 2, repeat — in strict numeric

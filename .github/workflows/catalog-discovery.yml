@@ -37,12 +37,12 @@ jobs:
       - name: Assert catalog PR touches only catalog/
         run: |
           echo "=== Verifying catalog PR changed files ==="
-          git fetch origin ${{ github.base_ref }}
+          git fetch origin +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           echo "Changed files in PR:"
           echo "$CHANGED_FILES"
 
-          FORBIDDEN_FILES=$(echo "$CHANGED_FILES" | grep -v '^catalog/' || true)
+          FORBIDDEN_FILES=$(echo "$CHANGED_FILES" | grep -vE '^catalog/|^$' || true)
           if [ -n "$FORBIDDEN_FILES" ]; then
             echo "::error::Catalog PRs must not modify files outside catalog/! Offending files:"
             echo "$FORBIDDEN_FILES"
@@ -155,15 +155,24 @@ jobs:
               ]
               candidates = single_files if single_files else gguf_files
 
+              # Filter out auxiliary non-model artifacts (importance matrices, multimodal projections, vocabularies)
+              non_auxiliary = [
+                  f for f in candidates
+                  if not re.search(r'(imatrix|\bmmproj\b|vocab)', f["path"], re.IGNORECASE)
+              ]
+              candidates = non_auxiliary if non_auxiliary else candidates
+
               # Match preferred quantization tags
               for preferred in PREFERRED_QUANTS:
                   for f in candidates:
-                      if preferred.lower() in f["path"].lower() and f["size"] <= MAX_FILE_SIZE_BYTES and f["oid"]:
+                      size = f.get("size") or 0
+                      if preferred.lower() in f["path"].lower() and size <= MAX_FILE_SIZE_BYTES and f.get("oid"):
                           return f
 
               # Fallback to any valid single GGUF within mobile size limit
               for f in candidates:
-                  if f["size"] <= MAX_FILE_SIZE_BYTES and f["oid"]:
+                  size = f.get("size") or 0
+                  if size <= MAX_FILE_SIZE_BYTES and f.get("oid"):
                       return f
               return None
 
@@ -178,6 +187,10 @@ jobs:
                       models = json.loads(resp.read().decode("utf-8"))
               except Exception as e:
                   print(f"Warning: Failed to fetch models for {author}: {e}", file=sys.stderr)
+                  continue
+
+              if not isinstance(models, list):
+                  print(f"Warning: Unexpected response format for {author}: {models}", file=sys.stderr)
                   continue
 
               for m in models:
@@ -203,16 +216,22 @@ jobs:
                   except Exception as e:
                       continue
 
+                  if not isinstance(tree_data, list):
+                      continue
+
                   gguf_files = []
                   for item in tree_data:
                       path = item.get("path", "")
                       if path.lower().endswith(".gguf"):
                           lfs = item.get("lfs") or {}
                           oid = lfs.get("oid", "")
-                          size = lfs.get("size", item.get("size", 0))
+                          raw_size = lfs.get("size") if lfs.get("size") is not None else item.get("size", 0)
+                          try:
+                              size = int(raw_size)
+                          except (TypeError, ValueError):
+                              size = 0
                           if oid and len(oid) == 64:
                               gguf_files.append({"path": path, "size": size, "oid": oid})
-
                   selected = select_quant_file(gguf_files)
                   if not selected:
                       continue
@@ -226,8 +245,13 @@ jobs:
                   model_base_name = repo_id.split("/")[-1].replace("-GGUF", "").replace("-gguf", "")
                   candidate_id = model_base_name
                   if candidate_id.strip().lower() in existing_ids:
-                      candidate_id = f"{model_base_name}-{selected['path'].split('.')[0]}"
-
+                      clean_path = selected['path'].rsplit('.', 1)[0].split('/')[-1]
+                      candidate_id = f"{model_base_name}-{clean_path}"
+                  base_candidate_id = candidate_id
+                  collision_counter = 1
+                  while candidate_id.strip().lower() in existing_ids:
+                      candidate_id = f"{base_candidate_id}-{collision_counter}"
+                      collision_counter += 1
                   # Context length from GGUF metadata or default 4096
                   gguf_meta = m.get("gguf") or {}
                   context_len = gguf_meta.get("context_length", 4096)
@@ -291,6 +315,12 @@ jobs:
             echo "No changes detected in catalog/models.json. Skipping PR creation."
             exit 0
           fi
+          # Avoid creating duplicate pull requests if a previous discovery PR is still open
+          EXISTING_PR=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("catalog-bot/")) | .number' | head -n 1)
+          if [ -n "$EXISTING_PR" ]; then
+            echo "A catalog discovery pull request (#$EXISTING_PR) is already open and pending review. Skipping PR creation."
+            exit 0
+          fi
 
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
           DATE_STR=$(date +'%Y-%m-%d')
@@ -304,9 +334,13 @@ jobs:
           git commit -m "chore(catalog): candidate model discoveries from Hugging Face [skip ci]"
           git push origin "$BRANCH_NAME"
 
-          gh pr create \
+          if ! gh pr create \
             --draft \
             --title "chore(catalog): candidate model discoveries ($DATE_STR)" \
             --body-file .github/PULL_REQUEST_TEMPLATE/catalog.md \
             --base master \
-            --head "$BRANCH_NAME"
+            --head "$BRANCH_NAME"; then
+            echo "::error::Failed to create pull request. Ensure 'Allow GitHub Actions to create and approve pull requests' is enabled in Repository Settings -> Actions -> General -> Workflow permissions."
+            git push origin --delete "$BRANCH_NAME" || true
+            exit 1
+          fi
